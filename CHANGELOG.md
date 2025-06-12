@@ -8,182 +8,145 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Initial project setup and core architecture
-- Complete MCP protocol implementation with JSON-RPC 2.0 support
-- Multi-transport architecture (STDIO, HTTP, WebSocket)
-- Comprehensive server implementation with tool, resource, and prompt management
-- Full-featured client implementation with session management
-- Auto-reconnection and connection lifecycle management
-- Real-time bidirectional communication support
-- JSON Schema validation for tool parameters
-- URI-based resource management with MIME type detection
-- Dynamic prompt template system
-- Comprehensive error handling and recovery mechanisms
-- 8 complete examples covering all transport types and use cases
-- Extensive test suite with 85+ unit tests and integration tests
-- Performance benchmarks for optimization
-- Complete documentation with usage guides and API reference
+- Initial implementation of MCP Protocol SDK
+- Complete MCP 2024-11-05 protocol support
+- STDIO, HTTP, and WebSocket transport layers
+- Comprehensive tool, resource, and prompt systems
+- Optional feature flags for modular builds
+- Production-ready error handling and validation
+- Extensive documentation and examples
+- Integration guides for Claude Desktop, Cursor, and VS Code
 
-### Features
+### Changed
+- N/A (initial release)
 
-#### Core Protocol
-- JSON-RPC 2.0 compliant request/response handling
-- Complete MCP message type definitions
-- Protocol validation and error handling
-- Extensible message framework
+### Deprecated
+- N/A (initial release)
 
-#### Transport Layer
-- **STDIO Transport**: Process-based communication (default)
-- **HTTP Transport**: RESTful API with Server-Sent Events for real-time notifications
-- **WebSocket Transport**: Full-duplex real-time bidirectional communication
-- Pluggable transport architecture for easy extension
-- Configurable timeouts, compression, and connection parameters
+### Removed
+- N/A (initial release)
 
-#### Server Implementation
-- Multi-client support with async architecture
-- Dynamic tool registration and execution
-- Resource discovery and content serving
-- Prompt template registration and retrieval
-- Real-time notification broadcasting
-- Graceful shutdown and cleanup
+### Fixed
+- N/A (initial release)
 
-#### Client Implementation
-- Session management with auto-reconnection
-- Exponential backoff retry logic
-- Connection pooling and lifecycle management
-- Request timeout and cancellation
-- Statistics and monitoring hooks
+### Security
+- N/A (initial release)
 
-#### Developer Experience
-- Type-safe Rust implementation with compile-time guarantees
-- Comprehensive error types covering all failure modes
-- Detailed documentation with examples
-- Multiple feature flags for selective compilation
-- Memory-efficient async design
-- Extensive logging and debugging support
-
-### Examples
-- `simple_server` - Basic MCP server with essential tools
-- `echo_server` - Demonstration server with tool examples
-- `client_example` - Basic client usage and connection
-- `database_server` - Database integration patterns
-- `http_server` - HTTP transport with REST API and SSE
-- `http_client` - HTTP client with real-time updates
-- `websocket_server` - Real-time WebSocket server
-- `websocket_client` - WebSocket client with bidirectional messaging
-
-### Dependencies
-- `tokio` - Async runtime and utilities
-- `serde` - Serialization framework
-- `serde_json` - JSON serialization
-- `async-trait` - Async trait support
-- `uuid` - Unique identifier generation
-- `url` - URL parsing and manipulation
-- `thiserror` - Error handling
-- `tracing` - Structured logging
-- `axum` - HTTP server framework (optional)
-- `reqwest` - HTTP client (optional)
-- `tokio-tungstenite` - WebSocket support (optional)
-
-## [0.1.0] - 2024-01-XX
+## [0.1.0] - 2024-06-12
 
 ### Added
-- Initial release of MCP Rust SDK
-- Complete implementation of Model Context Protocol specification
-- Multi-transport support (STDIO, HTTP, WebSocket)
-- Comprehensive documentation and examples
-- Full test suite with CI/CD integration
+- **Core Protocol Implementation**
+  - Complete JSON-RPC 2.0 support with error handling
+  - MCP 2024-11-05 specification compliance
+  - Async/await support with Tokio runtime
+  - Type-safe protocol message handling
 
-## Release Process
+- **Transport Layer**
+  - STDIO transport for Claude Desktop integration
+  - HTTP transport with RESTful API support (optional feature)
+  - WebSocket transport for real-time communication (optional feature)
+  - Configurable timeouts, connection pooling, and retry logic
 
-### Version Numbering
-This project follows [Semantic Versioning](https://semver.org/):
-- **MAJOR.MINOR.PATCH** (e.g., 1.2.3)
-- **MAJOR**: Breaking changes that require user code updates
-- **MINOR**: New features that are backwards compatible
-- **PATCH**: Bug fixes and improvements that are backwards compatible
+- **Tool System**
+  - Dynamic tool registration and discovery
+  - Parameter validation and type checking
+  - Async tool execution with error handling
+  - Tool handler middleware support
 
-### Release Categories
+- **Resource System**
+  - Static and dynamic resource access
+  - URI-based resource identification
+  - MIME type detection and content negotiation
+  - Binary and text content support
 
-#### Major Releases (X.0.0)
-- Breaking API changes
-- Major architectural changes
-- Removal of deprecated features
-- Minimum supported Rust version changes
+- **Prompt System**
+  - Reusable prompt templates with parameters
+  - Role-based message construction
+  - Template variable substitution
+  - Prompt validation and formatting
 
-#### Minor Releases (0.X.0)
-- New features and capabilities
-- New transport types
-- New tool/resource/prompt features
-- Performance improvements
-- Enhanced developer experience
+- **Feature Flags**
+  - `stdio` - STDIO transport (default)
+  - `http` - HTTP transport (default)
+  - `websocket` - WebSocket transport (default)
+  - `validation` - Enhanced validation (default)
+  - `tracing-subscriber` - Built-in logging (optional)
 
-#### Patch Releases (0.0.X)
-- Bug fixes
-- Security updates
-- Documentation improvements
-- Minor performance optimizations
+- **Examples and Documentation**
+  - Echo server example with STDIO transport
+  - Database server example with SQL integration
+  - HTTP server example with REST API
+  - WebSocket server example with real-time updates
+  - File system server example
+  - Basic client example
+  - Comprehensive integration guides
 
-### Change Categories
+- **Developer Experience**
+  - Builder patterns for easy configuration
+  - Comprehensive error types with context
+  - Extensive unit and integration tests
+  - Performance benchmarks and optimization
+  - CI/CD pipeline with multi-platform testing
 
-#### Added
-- New features, APIs, or capabilities
-- New examples or documentation
-- New transport types or protocols
+- **Production Features**
+  - Memory management and resource cleanup
+  - Graceful shutdown handling
+  - Request/response size limits
+  - Concurrent request management
+  - Logging and monitoring integration
 
-#### Changed
-- Modifications to existing functionality
-- API improvements or enhancements
-- Performance optimizations
-- Updated dependencies
-
-#### Deprecated
-- Features that will be removed in future versions
-- Prefer alternative approaches
-- Migration guides provided
-
-#### Removed
-- Deleted features or APIs
-- Breaking changes with major version bumps
-- Cleanup of deprecated functionality
-
-#### Fixed
-- Bug fixes and error corrections
-- Security vulnerability fixes
-- Memory leaks or performance issues
-
-#### Security
-- Security-related improvements
-- Vulnerability fixes
-- Privacy enhancements
-
-### Migration Guides
-
-When breaking changes are introduced, detailed migration guides will be provided:
-
-1. **What Changed**: Clear description of the changes
-2. **Why**: Rationale for the breaking change
-3. **Migration Steps**: Step-by-step guide to update code
-4. **Examples**: Before/after code examples
-5. **Timeline**: Deprecation and removal timeline
-
-### Compatibility
-
-#### Rust Version Compatibility
-- **Minimum Supported Rust Version (MSRV)**: 1.70.0
-- MSRV changes are considered breaking changes
-- MSRV policy: Support last 6 months of stable releases
-
-#### Platform Compatibility
-- **Primary**: Linux, macOS, Windows
-- **Architecture**: x86_64, aarch64
-- **Testing**: All platforms tested in CI
-
-#### Protocol Compatibility
-- **MCP Protocol**: Follows official specification
-- **JSON-RPC**: 2.0 compliant
-- **Backwards Compatibility**: Maintained within major versions
+### Security
+- Input validation for all protocol messages
+- Safe async execution with proper error boundaries
+- Resource access controls and URI validation
+- Transport-layer security support preparation
 
 ---
 
-**Note**: This changelog follows the [Keep a Changelog](https://keepachangelog.com/) format. For detailed commit history, see the [GitHub repository](https://github.com/rishirandhawa/mcp-protocol-sdk).
+## Release Notes
+
+### v0.1.0 - Initial Release
+
+This is the first stable release of the MCP Protocol SDK for Rust. The SDK provides a complete, production-ready implementation of the Model Context Protocol specification.
+
+**Key Highlights:**
+- 🦀 Pure Rust implementation with zero-cost abstractions
+- 🔌 Multiple transport options (STDIO, HTTP, WebSocket)
+- 🛠️ Complete MCP feature support (tools, resources, prompts)
+- 📦 Modular design with optional features
+- 🚀 Ready for integration with Claude Desktop, Cursor, VS Code
+- 📖 Comprehensive documentation and examples
+
+**Getting Started:**
+```toml
+[dependencies]
+mcp-protocol-sdk = "0.1.0"
+```
+
+See the [Getting Started Guide](./docs/getting-started.md) for a 5-minute introduction.
+
+**Breaking Changes:** None (initial release)
+
+**Migration Guide:** N/A (initial release)
+
+**Contributors:** Thank you to all contributors who made this release possible!
+
+---
+
+## Development Notes
+
+### Versioning Strategy
+- **0.x.y** - Pre-1.0 releases with potential breaking changes
+- **1.x.y** - Stable API with semantic versioning
+- **x.y.z** - Patch releases for bug fixes and minor improvements
+
+### Release Cadence
+- **Major releases** - When significant new features or breaking changes are introduced
+- **Minor releases** - Monthly or as needed for new features
+- **Patch releases** - As needed for bug fixes and security updates
+
+### Upgrade Path
+We are committed to providing clear upgrade paths and migration guides for all breaking changes. Deprecation warnings will be provided at least one minor version before removal.
+
+### Feedback and Issues
+Please report issues and provide feedback through [GitHub Issues](https://github.com/your-username/mcp-protocol-sdk/issues).

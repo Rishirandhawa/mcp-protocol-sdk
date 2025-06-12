@@ -1,222 +1,255 @@
 # MCP Protocol SDK
 
-**A production-ready, feature-complete Rust implementation of the Model Context Protocol**
-
 [![Crates.io](https://img.shields.io/crates/v/mcp-protocol-sdk.svg)](https://crates.io/crates/mcp-protocol-sdk)
 [![Documentation](https://docs.rs/mcp-protocol-sdk/badge.svg)](https://docs.rs/mcp-protocol-sdk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![CI](https://github.com/rishirandhawa/mcp-protocol-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/rishirandhawa/mcp-protocol-sdk/actions/workflows/ci.yml)
-[![Security Audit](https://github.com/rishirandhawa/mcp-protocol-sdk/actions/workflows/security.yml/badge.svg)](https://github.com/rishirandhawa/mcp-protocol-sdk/actions/workflows/security.yml)
-[![codecov](https://codecov.io/gh/rishirandhawa/mcp-protocol-sdk/branch/main/graph/badge.svg)](https://codecov.io/gh/rishirandhawa/mcp-protocol-sdk)
+[![CI](https://github.com/your-username/mcp-protocol-sdk/workflows/CI/badge.svg)](https://github.com/your-username/mcp-protocol-sdk/actions)
+[![Security Audit](https://github.com/your-username/mcp-protocol-sdk/workflows/Security%20Audit/badge.svg)](https://github.com/your-username/mcp-protocol-sdk/actions)
+[![codecov](https://codecov.io/gh/your-username/mcp-protocol-sdk/branch/main/graph/badge.svg)](https://codecov.io/gh/your-username/mcp-protocol-sdk)
 
-> 📖 **[Complete Documentation & Guides](https://rishirandhawa.github.io/mcp-protocol-sdk)** | 📚 **[API Reference](https://docs.rs/mcp-protocol-sdk)** | 🚀 **[Getting Started](https://rishirandhawa.github.io/mcp-protocol-sdk/getting-started)**
+**A production-ready, feature-complete Rust implementation of the Model Context Protocol**
+
+The MCP Protocol SDK enables seamless integration between AI models and external systems through a standardized protocol. Build powerful tools, resources, and capabilities that AI can discover and use dynamically.
 
 ---
 
-## 🎯 Why MCP Protocol SDK?
+## 📚 [Complete Documentation & Guides](./docs/README.md) | 📖 [API Reference](./docs/api/README.md) | 🚀 [Getting Started](./docs/getting-started.md)
 
-The **Model Context Protocol (MCP)** is revolutionizing how AI assistants interact with external systems. While the official `rmcp` SDK provides basic functionality, **mcp-protocol-sdk** fills the gap for production applications that need:
+---
 
-- **🏢 Enterprise-grade reliability** with comprehensive error handling and monitoring
-- **🌐 Multiple transport options** beyond just STDIO (HTTP, WebSocket)
-- **⚡ Advanced session management** with auto-reconnection and connection pooling
-- **🚀 Production-ready features** like validation, performance optimization, and extensive testing
+## ✨ Features
 
-### **Perfect For:**
-- **Enterprise Applications** requiring reliability and monitoring
-- **Multi-Client Systems** with WebSocket or HTTP transports  
-- **Real-time Applications** with live data streaming
-- **Complex Integrations** needing advanced session management
-- **Production Deployments** requiring comprehensive error handling
+- 🦀 **Pure Rust** - Zero-cost abstractions, memory safety, and blazing performance
+- 🔌 **Multiple Transports** - STDIO, HTTP, WebSocket support with optional features
+- 🛠️ **Complete MCP Support** - Tools, resources, prompts, logging, and sampling
+- 🎯 **Type-Safe** - Comprehensive type system with compile-time guarantees  
+- 🚀 **Async/Await** - Built on Tokio for high-performance concurrent operations
+- 📦 **Modular Design** - Optional features for minimal binary size
+- 🔒 **Production Ready** - Comprehensive error handling, validation, and testing
+- 📖 **Excellent Docs** - Complete guides for servers, clients, and integrations
 
 ## 🚀 Quick Start
 
-### **30-Second Server**
-
-```rust
-use mcp_protocol_sdk::{server::McpServer, transport::stdio::StdioServerTransport};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = McpServer::new("my-server".to_string(), "1.0.0".to_string());
-    
-    // Add your tools, resources, and prompts
-    server.add_tool("echo".to_string(), None, json!({}), EchoTool).await?;
-    
-    // Start with any transport (STDIO, HTTP, WebSocket)
-    let transport = StdioServerTransport::new();
-    server.start(transport).await?;
-    
-    Ok(())
-}
-```
-
-### **Simple Client Connection**
-
-```rust
-use mcp_protocol_sdk::{client::{McpClient, ClientSession}, transport::websocket::WebSocketClientTransport};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let client = McpClient::new("my-client".to_string(), "1.0.0".to_string());
-    let session = ClientSession::new(client);
-    
-    // Connect via WebSocket, HTTP, or STDIO
-    let transport = WebSocketClientTransport::new("ws://localhost:8080").await?;
-    let init_result = session.connect(transport).await?;
-    
-    // Use the connected client
-    let result = session.client().lock().await.call_tool("echo".to_string(), None).await?;
-    
-    Ok(())
-}
-```
-
-**[👉 Complete Getting Started Guide](https://rishirandhawa.github.io/mcp-protocol-sdk/getting-started)**
-
-## 🔥 Key Features
-
-### **Multi-Transport Architecture**
-- **📟 STDIO Transport**: Efficient process-based communication  
-- **🌐 HTTP Transport**: RESTful API with Server-Sent Events
-- **⚡ WebSocket Transport**: Real-time bidirectional communication
-
-### **Production-Ready Components**
-- **🔄 Session Management**: Auto-reconnection with exponential backoff
-- **🛡️ Error Recovery**: Comprehensive error handling and graceful degradation  
-- **✅ Validation**: JSON Schema validation for tool parameters
-- **📊 Monitoring**: Built-in metrics and performance tracking
-
-### **Developer Experience**
-- **🦀 Type Safety**: Full Rust type system for all MCP constructs
-- **⚡ Async/Await**: Built on Tokio for high-performance operations
-- **📚 Rich APIs**: Intuitive, well-documented interfaces
-- **🎯 Extensive Examples**: 8+ complete examples covering all use cases
-
-### **Performance & Scale**
-- **🚀 High Throughput**: >10,000 requests/second
-- **⚡ Low Latency**: <1ms for simple operations  
-- **💾 Memory Efficient**: Minimal allocation overhead
-- **📈 Scalable**: Supports thousands of concurrent connections
-
-## 📊 vs Official SDK
-
-| Feature | **mcp-protocol-sdk** | Official rmcp |
-|---------|------------------|---------------|
-| **Transport Options** | ✅ STDIO, HTTP, WebSocket | ❌ STDIO, SSE only |
-| **Session Management** | ✅ Auto-reconnection, pooling | ❌ Basic connection |
-| **Error Handling** | ✅ Comprehensive recovery | ❌ Limited error types |
-| **Production Ready** | ✅ Monitoring, validation | ❌ Basic functionality |
-| **Documentation** | ✅ Extensive guides + examples | ❌ Minimal docs |
-| **Examples** | ✅ 8+ complete examples | ❌ Few basic examples |
-| **Test Coverage** | ✅ 85+ tests + benchmarks | ❌ Limited testing |
-| **API Design** | ✅ Explicit, intuitive APIs | ❌ Macro-heavy |
-
-**[📖 Detailed Comparison & Migration Guide](https://rishirandhawa.github.io/mcp-protocol-sdk#comparison-with-official-sdk)**
-
-## 🎯 Use Cases & Examples
-
-### **Enterprise Applications**
-```rust
-// Financial trading platform with real-time data
-let transport = WebSocketServerTransport::new("0.0.0.0:8080");
-server.add_tool("get_market_data", MarketDataTool).await?;
-server.start(transport).await?; // Supports 1000+ concurrent connections
-```
-
-### **Multi-Client Systems**  
-```rust
-// Customer support platform with live chat
-let transport = HttpServerTransport::new("0.0.0.0:3000");
-server.add_tool("create_ticket", TicketTool).await?;
-// RESTful API: POST /mcp/request + SSE events: GET /mcp/events
-```
-
-### **Real-time Applications**
-```rust
-// Live collaboration with AI assistance  
-let session_config = SessionConfig {
-    auto_reconnect: true,
-    max_reconnect_attempts: 10,
-    // ... resilient configuration
-};
-```
-
-### **Complex Integrations**
-```rust
-// ERP system with AI-powered automation
-server.add_resource("database://", DatabaseResource).await?;
-server.add_prompt("analysis_prompt", AnalysisPrompt).await?;
-// Comprehensive error handling + monitoring
-```
-
-**[🔍 More Examples & Use Cases](https://rishirandhawa.github.io/mcp-protocol-sdk/examples)**
-
-## 📦 Installation
+### Add to Your Project
 
 ```toml
 [dependencies]
 mcp-protocol-sdk = "0.1.0"
 
-# For specific features:
-mcp-protocol-sdk = { version = "0.1.0", features = ["http"] }        # HTTP + SSE
-mcp-protocol-sdk = { version = "0.1.0", features = ["websocket"] }   # WebSocket  
-mcp-protocol-sdk = { version = "0.1.0", features = ["full"] }        # All features
+# Or with specific features only:
+mcp-protocol-sdk = { version = "0.1.0", features = ["stdio", "validation"] }
 ```
 
-| Feature | Description | Default |
-|---------|-------------|---------|
-| `stdio` | STDIO transport | ✅ |
-| `http` | HTTP + Server-Sent Events | ❌ |
-| `websocket` | WebSocket transport | ❌ | 
-| `validation` | JSON Schema validation | ❌ |
-| `full` | All features | ❌ |
+### Build an MCP Server (5 minutes)
 
-## 📚 Documentation & Guides
+```rust
+use mcp_protocol_sdk::prelude::*;
+use serde_json::json;
 
-### **🚀 Getting Started**
-- **[Getting Started Guide](https://rishirandhawa.github.io/mcp-protocol-sdk/getting-started)** - Build your first MCP app in 5 minutes
-- **[Examples Collection](https://rishirandhawa.github.io/mcp-protocol-sdk/examples)** - Real-world usage examples
-- **[Transport Guide](https://rishirandhawa.github.io/mcp-protocol-sdk/transports)** - Deep dive into transport options
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create server
+    let mut server = McpServer::new("my-calculator", "1.0.0");
+    
+    // Add a tool
+    let calc_tool = Tool::new("add", "Add two numbers")
+        .with_parameter("a", "First number", true)
+        .with_parameter("b", "Second number", true);
+    
+    server.add_tool(calc_tool);
+    
+    // Handle tool calls
+    server.set_tool_handler("add", |params| async move {
+        let a = params["a"].as_f64().unwrap_or(0.0);
+        let b = params["b"].as_f64().unwrap_or(0.0);
+        Ok(json!({ "result": a + b }))
+    });
+    
+    // Start server (compatible with Claude Desktop)
+    let transport = StdioServerTransport::new();
+    server.run(transport).await?;
+    
+    Ok(())
+}
+```
 
-### **🏗️ Architecture & API**  
-- **[Architecture Overview](https://rishirandhawa.github.io/mcp-protocol-sdk/architecture)** - System design and patterns
-- **[API Reference](https://docs.rs/mcp-protocol-sdk)** - Complete API documentation
-- **[Migration Guide](https://rishirandhawa.github.io/mcp-protocol-sdk#comparison-with-official-sdk)** - From official rmcp SDK
+### Build an MCP Client
 
-### **🔗 Quick Links**
-- **[📦 Crates.io](https://crates.io/crates/mcp-protocol-sdk)** - Package registry
-- **[🐙 GitHub](https://github.com/rishirandhawa/mcp-protocol-sdk)** - Source code & issues
-- **[📄 Complete Project Overview](PROJECT_OVERVIEW.md)** - Why, what, and who should use this SDK
+```rust
+use mcp_protocol_sdk::prelude::*;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Connect to server
+    let client = McpClient::new()
+        .with_name("my-client")
+        .build();
+    
+    let transport = StdioClientTransport::new();
+    client.connect(transport).await?;
+    client.initialize().await?;
+    
+    // Use server capabilities
+    let tools = client.list_tools().await?;
+    let result = client.call_tool("add", json!({"a": 5, "b": 3})).await?;
+    
+    println!("Result: {}", result);
+    Ok(())
+}
+```
+
+## 🎯 Use Cases
+
+| **Scenario** | **Description** | **Guide** |
+|--------------|-----------------|-----------|
+| 🖥️ **Claude Desktop Integration** | Add custom tools to Claude Desktop | [📝 Guide](./docs/integrations/claude-desktop.md) |
+| ⚡ **Cursor IDE Enhancement** | AI-powered development tools | [📝 Guide](./docs/integrations/cursor.md) |
+| 📝 **VS Code Extensions** | Smart code assistance and automation | [📝 Guide](./docs/integrations/vscode.md) |
+| 🗄️ **Database Access** | SQL queries and data analysis | [📝 Example](./examples/database_server.rs) |
+| 🌐 **API Integration** | External service connectivity | [📝 Example](./examples/http_server.rs) |
+| 📁 **File Operations** | Filesystem tools and utilities | [📝 Example](./examples/simple_server.rs) |
+| 💬 **Chat Applications** | Real-time AI conversations | [📝 Example](./examples/websocket_server.rs) |
+
+## 🏗️ Architecture
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   AI Client     │    │  MCP Protocol   │    │   MCP Server    │
+│  (Claude, etc.) │◄──►│      SDK        │◄──►│  (Your Tools)   │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                              │
+                    ┌─────────┼─────────┐
+                    │         │         │
+              ┌──────▼──┐ ┌────▼───┐ ┌───▼────┐
+              │  STDIO  │ │  HTTP  │ │WebSocket│
+              │Transport│ │Transport│ │Transport│
+              └─────────┘ └────────┘ └────────┘
+```
+
+## 🔧 Feature Flags
+
+Optimize your binary size by selecting only needed features:
+
+| Feature | Description | Default | Size Impact |
+|---------|-------------|---------|-------------|
+| `stdio` | STDIO transport for Claude Desktop | ✅ | Minimal |
+| `http` | HTTP transport for web integration | ✅ | +2MB |
+| `websocket` | WebSocket transport for real-time | ✅ | +1.5MB |
+| `validation` | Enhanced input validation | ✅ | +500KB |
+| `tracing-subscriber` | Built-in logging setup | ❌ | +300KB |
+
+**Minimal Example** (STDIO only):
+```toml
+mcp-protocol-sdk = { version = "0.1.0", default-features = false, features = ["stdio"] }
+```
+
+## 📋 Protocol Support
+
+✅ **Complete MCP 2024-11-05 Implementation**
+
+- **Core Protocol** - JSON-RPC 2.0 with full error handling
+- **Tools** - Function calling with parameters and validation  
+- **Resources** - Static and dynamic content access
+- **Prompts** - Reusable prompt templates with parameters
+- **Logging** - Structured logging with multiple levels
+- **Sampling** - LLM sampling integration and control
+- **Roots** - Resource root discovery and management
+- **Progress** - Long-running operation progress tracking
+
+## 🌍 Integration Ecosystem
+
+### AI Clients
+- **Claude Desktop** - Ready-to-use STDIO integration
+- **Cursor IDE** - Smart development assistance  
+- **VS Code** - Extension development framework
+- **Custom AI Apps** - HTTP/WebSocket APIs
+
+### Development Tools  
+- **Jupyter Notebooks** - Data science workflows
+- **Streamlit Apps** - Interactive AI applications
+- **Browser Extensions** - Web-based AI tools
+- **Mobile Apps** - React Native integration
+
+## 📊 Examples
+
+| Example | Description | Transport | Features |
+|---------|-------------|-----------|----------|
+| [Echo Server](./examples/echo_server.rs) | Simple tool demonstration | STDIO | Basic tools |
+| [Database Server](./examples/database_server.rs) | SQL query execution | STDIO | Database access |
+| [HTTP Server](./examples/http_server.rs) | RESTful API integration | HTTP | Web services |
+| [WebSocket Server](./examples/websocket_server.rs) | Real-time communication | WebSocket | Live updates |
+| [File Server](./examples/simple_server.rs) | File system operations | STDIO | File handling |
+| [Client Example](./examples/client_example.rs) | Basic client usage | STDIO | Client patterns |
+
+## 🛠️ Development
+
+### Prerequisites
+- Rust 1.75+ 
+- Cargo
+
+### Build & Test
+```bash
+# Build with all features
+cargo build --all-features
+
+# Test with different feature combinations  
+cargo test --no-default-features --features stdio
+cargo test --all-features
+
+# Run examples
+cargo run --example echo_server --features stdio,tracing-subscriber
+```
+
+### Feature Development
+```bash
+# Test minimal build
+cargo check --no-default-features --lib
+
+# Test specific transports
+cargo check --no-default-features --features http
+cargo check --no-default-features --features websocket
+```
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on:
+We welcome contributions! Please see our [Contributing Guide](./CONTRIBUTING.md) for details.
 
-- 🐛 Bug reports and feature requests
-- 💻 Code contributions and improvements  
-- 📚 Documentation and examples
-- 🧪 Testing and quality assurance
+### Areas for Contribution
+- 🐛 **Bug Reports** - Help us improve reliability
+- 💡 **Feature Requests** - Suggest new capabilities  
+- 📖 **Documentation** - Improve guides and examples
+- 🔧 **Tool Integrations** - Build example servers
+- 🧪 **Testing** - Expand test coverage
+- 🚀 **Performance** - Optimize critical paths
+
+## 📋 Roadmap
+
+- [ ] **Advanced Authentication** - OAuth2, JWT, mTLS support
+- [ ] **Monitoring Integration** - Prometheus metrics, health checks
+- [ ] **Plugin System** - Dynamic tool loading and registration
+- [ ] **Schema Registry** - Tool and resource schema management  
+- [ ] **Load Balancing** - Multiple server instance coordination
+- [ ] **Caching Layer** - Response caching and invalidation
+- [ ] **Rate Limiting** - Advanced traffic control
+- [ ] **Admin Dashboard** - Web-based server management
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Licensed under the [MIT License](./LICENSE).
+
+## 🙏 Acknowledgments
+
+- **Anthropic** - For creating the MCP specification
+- **Tokio Team** - For the excellent async runtime
+- **Serde Team** - For JSON serialization/deserialization
+- **Rust Community** - For the amazing ecosystem
 
 ---
 
-## 🌟 Why Choose MCP Protocol SDK?
+<div align="center">
 
-**For Production Applications:**
-- ✅ Comprehensive error handling and recovery
-- ✅ Advanced session management with auto-reconnection
-- ✅ Multiple transport options for different architectures  
-- ✅ Built-in monitoring and performance optimization
-- ✅ Extensive testing and documentation
+**[📚 Read the Full Documentation](./docs/README.md)** | **[🚀 Get Started Now](./docs/getting-started.md)**
 
-**For Developers:**
-- ✅ Intuitive, explicit APIs (no magic macros)
-- ✅ Rich type system with compile-time safety
-- ✅ Comprehensive examples and tutorials
-- ✅ Active development and community support
+*Built with ❤️ in Rust*
 
-**[Start building with MCP Protocol SDK today! 🚀](https://rishirandhawa.github.io/mcp-protocol-sdk/getting-started)**
+</div>
