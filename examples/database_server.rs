@@ -303,6 +303,7 @@ impl ResourceHandler for DatabaseResourceHandler {
 #[tokio::main]
 async fn main() -> McpResult<()> {
     // Initialize logging
+    #[cfg(feature = "tracing-subscriber")]
     tracing_subscriber::fmt::init();
 
     let mut server = McpServer::new("database-server".to_string(), "1.0.0".to_string());

@@ -17,6 +17,7 @@ use mcp_protocol_sdk::{
 #[tokio::main]
 async fn main() -> McpResult<()> {
     // Initialize logging
+    #[cfg(feature = "tracing-subscriber")]
     tracing_subscriber::fmt::init();
 
     tracing::info!("Starting WebSocket MCP client example...");

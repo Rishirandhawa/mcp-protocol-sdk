@@ -52,7 +52,9 @@ impl ToolHandler for EchoHandler {
 
 #[tokio::main]
 async fn main() -> McpResult<()> {
-    // Initialize logging
+    // Initialize logging (only if tracing-subscriber feature is enabled)
+    #[cfg(feature = "tracing-subscriber")]
+    #[cfg(feature = "tracing-subscriber")]
     tracing_subscriber::fmt::init();
 
     let mut server = McpServer::new("echo-server".to_string(), "1.0.0".to_string());

@@ -326,6 +326,7 @@ impl PromptHandler for DocumentationPromptHandler {
 #[tokio::main]
 async fn main() -> McpResult<()> {
     // Initialize logging
+    #[cfg(feature = "tracing-subscriber")]
     tracing_subscriber::fmt::init();
 
     // Create server with custom configuration
