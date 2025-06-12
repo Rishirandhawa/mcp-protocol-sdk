@@ -1,19 +1,21 @@
-# Personal Documentation Folder
+# My Documentation
 
-This folder contains personal development notes, implementation details, and other documentation that's specific to the development process but not intended for public distribution.
-
-## Contents
-
-- `IMPLEMENTATION_SUMMARY.md` - Detailed implementation notes and development progress
-- `SETUP_COMPLETE.md` - GitHub repository setup completion notes
-- `REPOSITORY_SETUP.md` - GitHub repository configuration guide
-- `PERSONAL_REMOVAL_SUMMARY.md` - Summary of personal information removal process
-- Any other personal notes, TODO lists, or development artifacts
+This directory contains local development documentation, notes, and artifacts that should not be committed to the repository.
 
 ## Purpose
 
-This folder is ignored by git (see `.gitignore`) to keep personal development notes separate from the public project documentation.
+- **Setup Status**: Track development and setup progress
+- **Documentation**: Local notes and documentation drafts
+- **Artifacts**: Generated files, exports, and temporary content
+- **Development Notes**: Personal development insights and TODOs
 
-## Usage
+## Contents
 
-Feel free to add any personal documentation, notes, sketches, or development artifacts here. They won't be committed to the repository.
+- `setup-status.md` - Current setup and implementation status
+- `development-notes.md` - Personal development notes and insights
+- `artifacts/` - Generated content and exports
+- `drafts/` - Documentation drafts and work in progress
+
+## Note
+
+This directory is ignored by git to keep personal development notes local.

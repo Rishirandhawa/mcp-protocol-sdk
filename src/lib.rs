@@ -1,3 +1,6 @@
+// Copyright (c) 2025 MCP Rust Contributors
+// SPDX-License-Identifier: MIT
+
 //! # MCP Rust SDK
 //!
 //! A comprehensive Rust SDK for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/),

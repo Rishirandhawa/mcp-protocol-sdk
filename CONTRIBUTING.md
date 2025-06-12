@@ -244,6 +244,26 @@ Looking to contribute? Check for issues labeled:
 - [Tokio Documentation](https://tokio.rs/)
 - [Serde Documentation](https://serde.rs/)
 
+## 🔒 License
+
+By contributing to this project, you agree that your contributions will be licensed under the **MIT License**.
+
+### License Requirements
+
+- All new files must include the MIT license header:
+  ```rust
+  // Copyright (c) 2025 MCP Rust Contributors
+  // SPDX-License-Identifier: MIT
+  ```
+- Contributions must be compatible with the MIT License
+- External dependencies must use compatible licenses (MIT, Apache 2.0, BSD)
+
+### Intellectual Property
+
+- You must have the right to contribute the code
+- Original work only - no copied code without proper attribution
+- By submitting a pull request, you grant the project maintainers the right to use your contribution under the MIT License
+
 ## 🙏 Recognition
 
 Contributors will be:
