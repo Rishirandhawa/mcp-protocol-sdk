@@ -1,0 +1,80 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+
+# Coverage reports
+tarpaulin-report.html
+cobertura.xml
+lcov.info
+
+# Benchmarks
+/target/criterion/
+
+# Documentation
+/target/doc/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Backup files
+*.bak
+*.backup
+
+# Lock files
+package-lock.json
+yarn.lock
+*.lock
+
+# Build artifacts
+/dist/
+/build/
+
+# Testing
+/test-results/
+/coverage/
+
+# Profiling
+*.prof
+perf.data*
+
+# Security
+audit.json
+
+# Local development
+.local/
+local/
+scratch/
+playground/
+
+# Dependencies
+node_modules/
+
+# Generated files
+*.generated.*
