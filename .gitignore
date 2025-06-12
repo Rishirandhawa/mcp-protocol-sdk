@@ -72,6 +72,7 @@ audit.json
 local/
 scratch/
 playground/
+my-docs/
 
 # Dependencies
 node_modules/
