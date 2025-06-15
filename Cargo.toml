@@ -1,6 +1,6 @@
 [package]
 name = "mcp-protocol-sdk"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 rust-version = "1.85"  # Minimum for 2024 edition
 authors = ["MCP Rust SDK Contributors"]
@@ -11,7 +11,7 @@ keywords = ["mcp", "ai", "llm", "protocol", "jsonrpc"]
 categories = ["api-bindings", "network-programming", "development-tools"]
 readme = "README.md"
 homepage = "https://modelcontextprotocol.io"
-documentation = "https://rishirandhawa.github.io/mcp-protocol-sdk/"
+documentation = "https://docs.rs/mcp-protocol-sdk"
 
 [lib]
 name = "mcp_protocol_sdk"
