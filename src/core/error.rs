@@ -6,7 +6,7 @@
 use thiserror::Error;
 
 /// The main error type for the MCP SDK
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum McpError {
     /// Transport-related errors (connection, I/O, etc.)
     #[error("Transport error: {0}")]
@@ -18,7 +18,7 @@ pub enum McpError {
 
     /// JSON serialization/deserialization errors
     #[error("Serialization error: {0}")]
-    Serialization(#[from] serde_json::Error),
+    Serialization(String),
 
     /// Invalid URI format or content
     #[error("Invalid URI: {0}")]
@@ -50,11 +50,11 @@ pub enum McpError {
 
     /// I/O errors from the standard library
     #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
+    Io(String),
 
     /// URL parsing errors
     #[error("URL error: {0}")]
-    Url(#[from] url::ParseError),
+    Url(String),
 
     /// HTTP-related errors when using HTTP transport
     #[cfg(feature = "http")]
@@ -82,6 +82,25 @@ pub enum McpError {
     /// Internal errors that shouldn't normally occur
     #[error("Internal error: {0}")]
     Internal(String),
+}
+
+// Manual From implementations for types that don't implement Clone
+impl From<serde_json::Error> for McpError {
+    fn from(err: serde_json::Error) -> Self {
+        McpError::Serialization(err.to_string())
+    }
+}
+
+impl From<std::io::Error> for McpError {
+    fn from(err: std::io::Error) -> Self {
+        McpError::Io(err.to_string())
+    }
+}
+
+impl From<url::ParseError> for McpError {
+    fn from(err: url::ParseError) -> Self {
+        McpError::Url(err.to_string())
+    }
 }
 
 /// Result type alias for MCP operations
@@ -115,12 +134,12 @@ impl McpError {
 
     /// Create a new IO error from std::io::Error
     pub fn io(err: std::io::Error) -> Self {
-        Self::Io(err)
+        Self::Io(err.to_string())
     }
 
     /// Create a new serialization error from serde_json::Error
     pub fn serialization(err: serde_json::Error) -> Self {
-        Self::Serialization(err)
+        Self::Serialization(err.to_string())
     }
 
     /// Create a new timeout error

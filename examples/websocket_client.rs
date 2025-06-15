@@ -40,7 +40,7 @@ async fn main() -> McpResult<()> {
     // Connect to WebSocket server
     tracing::info!("Connecting to WebSocket server...");
 
-    let transport = WebSocketClientTransport::new("ws://localhost:8080").await?;
+    let transport = WebSocketClientTransport::new("ws://localhost:8081").await?;
 
     match session.connect(transport).await {
         Ok(init_result) => {
@@ -110,7 +110,7 @@ async fn demonstrate_websocket_operations(
                 tracing::info!("WebSocket Echo result:");
                 for content in &result.content {
                     match content {
-                        Content::Text { text } => {
+                        Content::Text { text, .. } => {
                             tracing::info!("  {}", text);
                         }
                         _ => tracing::info!("  (non-text content)"),
@@ -138,7 +138,7 @@ async fn demonstrate_websocket_operations(
                 tracing::info!("WebSocket Broadcast result:");
                 for content in &result.content {
                     match content {
-                        Content::Text { text } => {
+                        Content::Text { text, .. } => {
                             tracing::info!("  {}", text);
                         }
                         _ => tracing::info!("  (non-text content)"),
@@ -166,7 +166,7 @@ async fn demonstrate_websocket_operations(
                 tracing::info!("WebSocket Chat result:");
                 for content in &result.content {
                     match content {
-                        Content::Text { text } => {
+                        Content::Text { text, .. } => {
                             tracing::info!("  {}", text);
                         }
                         _ => tracing::info!("  (non-text content)"),
@@ -197,7 +197,7 @@ async fn demonstrate_websocket_operations(
                 tracing::info!("WebSocket Chat (Bob) result:");
                 for content in &result.content {
                     match content {
-                        Content::Text { text } => {
+                        Content::Text { text, .. } => {
                             tracing::info!("  {}", text);
                         }
                         _ => tracing::info!("  (non-text content)"),
@@ -218,7 +218,7 @@ async fn demonstrate_websocket_operations(
         for resource in &resources_result.resources {
             tracing::info!(
                 "  - {}: {} ({})",
-                resource.name,
+                resource.name.as_deref().unwrap_or("Unknown"),
                 resource.uri,
                 resource.mime_type.as_deref().unwrap_or("unknown type")
             );
@@ -236,8 +236,13 @@ async fn demonstrate_websocket_operations(
             Ok(result) => {
                 tracing::info!("WebSocket Server status:");
                 for content in &result.contents {
-                    if let Some(text) = &content.text {
-                        tracing::info!("  {}", text);
+                    match content {
+                        mcp_protocol_sdk::protocol::types::ResourceContents::Text { text, .. } => {
+                            tracing::info!("  {}", text);
+                        }
+                        mcp_protocol_sdk::protocol::types::ResourceContents::Blob { .. } => {
+                            tracing::info!("  (binary content)");
+                        }
                     }
                 }
             }
@@ -256,8 +261,13 @@ async fn demonstrate_websocket_operations(
             Ok(result) => {
                 tracing::info!("WebSocket connections info:");
                 for content in &result.contents {
-                    if let Some(text) = &content.text {
-                        tracing::info!("  {}", text);
+                    match content {
+                        mcp_protocol_sdk::protocol::types::ResourceContents::Text { text, .. } => {
+                            tracing::info!("  {}", text);
+                        }
+                        mcp_protocol_sdk::protocol::types::ResourceContents::Blob { .. } => {
+                            tracing::info!("  (binary content)");
+                        }
                     }
                 }
             }

@@ -26,7 +26,7 @@ use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
 
 use crate::core::error::{McpError, McpResult};
-use crate::protocol::types::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
+use crate::protocol::types::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse, JsonRpcError, error_codes, JsonRpcMessage};
 use crate::transport::traits::{ConnectionState, ServerTransport, Transport, TransportConfig};
 
 // ============================================================================
@@ -42,6 +42,7 @@ pub struct HttpClientTransport {
     base_url: String,
     sse_url: Option<String>,
     headers: HeaderMap,
+    /// For tracking active requests (currently used for metrics/debugging)
     pending_requests: Arc<Mutex<HashMap<Value, tokio::sync::oneshot::Sender<JsonRpcResponse>>>>,
     notification_receiver: Option<mpsc::UnboundedReceiver<JsonRpcNotification>>,
     config: TransportConfig,
@@ -201,27 +202,81 @@ impl HttpClientTransport {
         *counter += 1;
         *counter
     }
+
+    /// Track request for metrics/debugging purposes
+    async fn track_request(&self, request_id: &Value) {
+        // For HTTP transport, we mainly use this for debugging and metrics
+        // Since HTTP is synchronous request/response, we don't need the async
+        // tracking that WebSocket uses, but we keep the interface for consistency
+        let mut pending = self.pending_requests.lock().await;
+        let (sender, _receiver) = tokio::sync::oneshot::channel();
+        pending.insert(request_id.clone(), sender);
+    }
+
+    /// Remove tracked request
+    async fn untrack_request(&self, request_id: &Value) {
+        let mut pending = self.pending_requests.lock().await;
+        pending.remove(request_id);
+    }
+
+    /// Get count of active requests (for debugging/metrics)
+    pub async fn active_request_count(&self) -> usize {
+        let pending = self.pending_requests.lock().await;
+        pending.len()
+    }
 }
 
 #[async_trait]
 impl Transport for HttpClientTransport {
     async fn send_request(&mut self, request: JsonRpcRequest) -> McpResult<JsonRpcResponse> {
+        // Generate request ID if not present or ensure we have a valid ID
+        let request_with_id = if request.id == Value::Null {
+            let request_id = self.next_request_id().await;
+            JsonRpcRequest {
+                id: Value::from(request_id),
+                ..request
+            }
+        } else {
+            request
+        };
+
+        // Track the request for debugging/metrics
+        self.track_request(&request_with_id.id).await;
+
         let url = format!("{}/mcp", self.base_url);
 
         let mut http_request = self.client.post(&url);
+        
+        // Apply headers from config and defaults
         for (name, value) in self.headers.iter() {
             let name_str = name.as_str();
             let value_bytes = value.as_bytes();
             http_request = http_request.header(name_str, value_bytes);
         }
 
+        // Apply timeout from config if specified
+        if let Some(timeout_ms) = self.config.read_timeout_ms {
+            http_request = http_request.timeout(Duration::from_millis(timeout_ms));
+        }
+
         let response = http_request
-            .json(&request)
+            .json(&request_with_id)
             .send()
             .await
-            .map_err(|e| McpError::Http(format!("HTTP request failed: {}", e)))?;
+            .map_err(|e| {
+                // Untrack request on error
+                let request_id = request_with_id.id.clone();
+                let pending_requests = self.pending_requests.clone();
+                tokio::spawn(async move {
+                    let mut pending = pending_requests.lock().await;
+                    pending.remove(&request_id);
+                });
+                McpError::Http(format!("HTTP request failed: {}", e))
+            })?;
 
         if !response.status().is_success() {
+            // Untrack request on HTTP error
+            self.untrack_request(&request_with_id.id).await;
             return Err(McpError::Http(format!(
                 "HTTP error: {} {}",
                 response.status().as_u16(),
@@ -232,7 +287,28 @@ impl Transport for HttpClientTransport {
         let json_response: JsonRpcResponse = response
             .json()
             .await
-            .map_err(|e| McpError::Http(format!("Failed to parse response: {}", e)))?;
+            .map_err(|e| {
+                // Untrack request on parse error
+                let request_id = request_with_id.id.clone();
+                let pending_requests = self.pending_requests.clone();
+                tokio::spawn(async move {
+                    let mut pending = pending_requests.lock().await;
+                    pending.remove(&request_id);
+                });
+                McpError::Http(format!("Failed to parse response: {}", e))
+            })?;
+
+        // Validate response ID matches request ID
+        if json_response.id != request_with_id.id {
+            self.untrack_request(&request_with_id.id).await;
+            return Err(McpError::Http(format!(
+                "Response ID {:?} does not match request ID {:?}",
+                json_response.id, request_with_id.id
+            )));
+        }
+
+        // Untrack successful request
+        self.untrack_request(&request_with_id.id).await;
 
         Ok(json_response)
     }
@@ -241,10 +317,17 @@ impl Transport for HttpClientTransport {
         let url = format!("{}/mcp/notify", self.base_url);
 
         let mut http_request = self.client.post(&url);
+        
+        // Apply headers from config and defaults
         for (name, value) in self.headers.iter() {
             let name_str = name.as_str();
             let value_bytes = value.as_bytes();
             http_request = http_request.header(name_str, value_bytes);
+        }
+
+        // Apply write timeout from config if specified
+        if let Some(timeout_ms) = self.config.write_timeout_ms {
+            http_request = http_request.timeout(Duration::from_millis(timeout_ms));
         }
 
         let response = http_request
@@ -382,24 +465,23 @@ impl ServerTransport for HttpServerTransport {
         let state = self.state.clone();
         let bind_addr = self.bind_addr.clone();
         let running = self.running.clone();
+        let _config = self.config.clone(); // TODO: Use config for timeouts/limits
 
-        // Create the Axum app
-        let app = Router::new()
+        // Create the Axum app with configuration-based settings
+        let mut app = Router::new()
             .route("/mcp", post(handle_mcp_request))
             .route("/mcp/notify", post(handle_mcp_notification))
             .route("/mcp/events", get(handle_sse_events))
             .route("/health", get(handle_health_check))
-            .layer(
-                ServiceBuilder::new()
-                    .layer(
-                        CorsLayer::new()
-                            .allow_origin(Any)
-                            .allow_methods(Any)
-                            .allow_headers(Any),
-                    )
-                    .into_inner(),
-            )
             .with_state(state);
+
+        // Apply CORS configuration
+        let cors_layer = CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any);
+
+        app = app.layer(ServiceBuilder::new().layer(cors_layer).into_inner());
 
         // Start the server
         let listener = tokio::net::TcpListener::bind(&bind_addr)
@@ -421,6 +503,10 @@ impl ServerTransport for HttpServerTransport {
     }
 
     async fn handle_request(&mut self, request: JsonRpcRequest) -> McpResult<JsonRpcResponse> {
+        // This is now handled by the HTTP server itself and should not be called directly
+        // The HTTP transport handles requests through the HTTP server routes
+        tracing::warn!("handle_request called directly on HTTP transport - this may indicate a configuration issue");
+        
         let state = self.state.read().await;
 
         if let Some(ref handler) = state.request_handler {
@@ -432,16 +518,8 @@ impl ServerTransport for HttpServerTransport {
                 Err(_) => Err(McpError::Http("Request handler channel closed".to_string())),
             }
         } else {
-            Ok(JsonRpcResponse {
-                jsonrpc: "2.0".to_string(),
-                id: request.id,
-                result: None,
-                error: Some(crate::protocol::types::JsonRpcError {
-                    code: crate::protocol::types::METHOD_NOT_FOUND,
-                    message: "No request handler configured".to_string(),
-                    data: None,
-                }),
-            })
+            // Return an error indicating no handler is configured
+            Err(McpError::Http("No request handler configured for HTTP transport".to_string()))
         }
     }
 
@@ -485,7 +563,7 @@ impl ServerTransport for HttpServerTransport {
 async fn handle_mcp_request(
     State(state): State<Arc<RwLock<HttpServerState>>>,
     Json(request): Json<JsonRpcRequest>,
-) -> Result<Json<JsonRpcResponse>, StatusCode> {
+) -> Result<Json<JsonRpcMessage>, StatusCode> {
     let state_guard = state.read().await;
 
     if let Some(ref handler) = state_guard.request_handler {
@@ -493,21 +571,17 @@ async fn handle_mcp_request(
         drop(state_guard); // Release the lock
 
         match response_rx.await {
-            Ok(response) => Ok(Json(response)),
+            Ok(response) => Ok(Json(JsonRpcMessage::Response(response))),
             Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
         }
     } else {
-        let error_response = JsonRpcResponse {
-            jsonrpc: "2.0".to_string(),
-            id: request.id,
-            result: None,
-            error: Some(crate::protocol::types::JsonRpcError {
-                code: crate::protocol::types::METHOD_NOT_FOUND,
-                message: "No request handler configured".to_string(),
-                data: None,
-            }),
-        };
-        Ok(Json(error_response))
+        let error_response = JsonRpcError::error(
+            request.id,
+            error_codes::METHOD_NOT_FOUND,
+            "No request handler configured".to_string(),
+            None,
+        );
+        Ok(Json(JsonRpcMessage::Error(error_response)))
     }
 }
 
@@ -569,7 +643,6 @@ async fn handle_health_check() -> Json<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     #[tokio::test]
     async fn test_http_client_creation() {

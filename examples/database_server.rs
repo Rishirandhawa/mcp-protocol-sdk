@@ -16,7 +16,7 @@ use mcp_protocol_sdk::{
         resource::ResourceHandler,
         tool::ToolHandler,
     },
-    protocol::types::{Content, ResourceContent, ResourceInfo, ToolResult},
+    protocol::types::{Content, ResourceContents, Resource as ResourceInfo, ToolResult},
     server::McpServer,
     transport::stdio::StdioServerTransport,
 };
@@ -71,6 +71,7 @@ impl ToolHandler for StoreHandler {
         Ok(ToolResult {
             content: vec![Content::text(message)],
             is_error: None,
+            meta: None,
         })
     }
 }
@@ -102,11 +103,13 @@ impl ToolHandler for RetrieveHandler {
                 Ok(ToolResult {
                     content: vec![Content::text(serde_json::to_string_pretty(&response)?)],
                     is_error: None,
+                    meta: None,
                 })
             }
             None => Ok(ToolResult {
                 content: vec![Content::text(format!("No record found with ID: {}", id))],
                 is_error: Some(true),
+                meta: None,
             }),
         }
     }
@@ -149,6 +152,7 @@ impl ToolHandler for ListHandler {
         Ok(ToolResult {
             content: vec![Content::text(serde_json::to_string_pretty(&response)?)],
             is_error: None,
+            meta: None,
         })
     }
 }
@@ -172,10 +176,12 @@ impl ToolHandler for DeleteHandler {
             Some(_) => Ok(ToolResult {
                 content: vec![Content::text(format!("Deleted record with ID: {}", id))],
                 is_error: None,
+                meta: None,
             }),
             None => Ok(ToolResult {
                 content: vec![Content::text(format!("No record found with ID: {}", id))],
                 is_error: Some(true),
+                meta: None,
             }),
         }
     }
@@ -192,7 +198,7 @@ impl ResourceHandler for DatabaseResourceHandler {
         &self,
         uri: &str,
         _params: &HashMap<String, String>,
-    ) -> McpResult<Vec<ResourceContent>> {
+    ) -> McpResult<Vec<ResourceContents>> {
         match uri {
             "db:///all" => {
                 let db = self.db.read().await;
@@ -200,11 +206,10 @@ impl ResourceHandler for DatabaseResourceHandler {
 
                 let content = serde_json::to_string_pretty(&records)?;
 
-                Ok(vec![ResourceContent {
+                Ok(vec![ResourceContents::Text {
                     uri: uri.to_string(),
                     mime_type: Some("application/json".to_string()),
-                    text: Some(content),
-                    blob: None,
+                    text: content,
                 }])
             }
             "db:///schema" => {
@@ -231,11 +236,10 @@ impl ResourceHandler for DatabaseResourceHandler {
                     }
                 });
 
-                Ok(vec![ResourceContent {
+                Ok(vec![ResourceContents::Text {
                     uri: uri.to_string(),
                     mime_type: Some("application/json".to_string()),
-                    text: Some(serde_json::to_string_pretty(&schema)?),
-                    blob: None,
+                    text: serde_json::to_string_pretty(&schema)?,
                 }])
             }
             _ if uri.starts_with("db:///record/") => {
@@ -245,11 +249,10 @@ impl ResourceHandler for DatabaseResourceHandler {
                 match db.get(id) {
                     Some(record) => {
                         let content = serde_json::to_string_pretty(record)?;
-                        Ok(vec![ResourceContent {
+                        Ok(vec![ResourceContents::Text {
                             uri: uri.to_string(),
                             mime_type: Some("application/json".to_string()),
-                            text: Some(content),
-                            blob: None,
+                            text: content,
                         }])
                     }
                     None => Err(McpError::ResourceNotFound(uri.to_string())),
@@ -264,15 +267,19 @@ impl ResourceHandler for DatabaseResourceHandler {
         let mut resources = vec![
             ResourceInfo {
                 uri: "db:///all".to_string(),
-                name: "All Records".to_string(),
+                name: Some("All Records".to_string()),
                 description: Some("All records in the database".to_string()),
                 mime_type: Some("application/json".to_string()),
+                annotations: None,
+                size: None,
             },
             ResourceInfo {
                 uri: "db:///schema".to_string(),
-                name: "Database Schema".to_string(),
+                name: Some("Database Schema".to_string()),
                 description: Some("JSON schema for database records".to_string()),
                 mime_type: Some("application/json".to_string()),
+                annotations: None,
+                size: None,
             },
         ];
 
@@ -280,9 +287,11 @@ impl ResourceHandler for DatabaseResourceHandler {
         for id in db.keys() {
             resources.push(ResourceInfo {
                 uri: format!("db:///record/{}", id),
-                name: format!("Record: {}", id),
+                name: Some(format!("Record: {}", id)),
                 description: Some(format!("Individual database record with ID: {}", id)),
                 mime_type: Some("application/json".to_string()),
+                annotations: None,
+                size: None,
             });
         }
 
@@ -396,9 +405,11 @@ async fn main() -> McpResult<()> {
         .add_resource_detailed(
             ResourceInfo {
                 uri: "db:///".to_string(),
-                name: "Database".to_string(),
+                name: Some("Database".to_string()),
                 description: Some("In-memory database with JSON records".to_string()),
                 mime_type: Some("application/json".to_string()),
+                annotations: None,
+                size: None,
             },
             DatabaseResourceHandler { db: db.clone() },
         )

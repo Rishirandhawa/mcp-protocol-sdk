@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 
 use crate::core::error::{McpError, McpResult};
-use crate::protocol::types::{ResourceContent, ResourceInfo};
+use crate::protocol::types::{ResourceContents, Resource as ResourceInfo};
 
 /// Template for parameterized resources
 #[derive(Debug, Clone, PartialEq)]
@@ -37,7 +37,7 @@ pub trait ResourceHandler: Send + Sync {
         &self,
         uri: &str,
         params: &HashMap<String, String>,
-    ) -> McpResult<Vec<ResourceContent>>;
+    ) -> McpResult<Vec<ResourceContents>>;
 
     /// List all available resources
     ///
@@ -117,9 +117,11 @@ impl Resource {
     {
         let info = ResourceInfo {
             uri: template.uri_template.clone(),
-            name: template.name.clone(),
+            name: Some(template.name.clone()),
             description: template.description.clone(),
             mime_type: template.mime_type.clone(),
+            annotations: None,
+            size: None,
         };
 
         Self {
@@ -157,11 +159,11 @@ impl Resource {
         &self,
         uri: &str,
         params: &HashMap<String, String>,
-    ) -> McpResult<Vec<ResourceContent>> {
+    ) -> McpResult<Vec<ResourceContents>> {
         if !self.enabled {
             return Err(McpError::validation(format!(
                 "Resource '{}' is disabled",
-                self.info.name
+                self.info.name.as_deref().unwrap_or("unknown")
             )));
         }
 
@@ -182,7 +184,7 @@ impl Resource {
         if !self.enabled {
             return Err(McpError::validation(format!(
                 "Resource '{}' is disabled",
-                self.info.name
+                self.info.name.as_deref().unwrap_or("unknown")
             )));
         }
 
@@ -194,7 +196,7 @@ impl Resource {
         if !self.enabled {
             return Err(McpError::validation(format!(
                 "Resource '{}' is disabled",
-                self.info.name
+                self.info.name.as_deref().unwrap_or("unknown")
             )));
         }
 
@@ -247,12 +249,11 @@ impl ResourceHandler for TextResource {
         &self,
         uri: &str,
         _params: &HashMap<String, String>,
-    ) -> McpResult<Vec<ResourceContent>> {
-        Ok(vec![ResourceContent {
+    ) -> McpResult<Vec<ResourceContents>> {
+        Ok(vec![ResourceContents::Text {
             uri: uri.to_string(),
             mime_type: Some(self.mime_type.clone()),
-            text: Some(self.content.clone()),
-            blob: None,
+            text: self.content.clone(),
         }])
     }
 
@@ -314,7 +315,7 @@ impl ResourceHandler for FileSystemResource {
         &self,
         uri: &str,
         _params: &HashMap<String, String>,
-    ) -> McpResult<Vec<ResourceContent>> {
+    ) -> McpResult<Vec<ResourceContents>> {
         // Extract file path from URI (assuming file:// scheme or relative path)
         let file_path = if uri.starts_with("file://") {
             uri.strip_prefix("file://").unwrap_or(uri)
@@ -344,11 +345,10 @@ impl ResourceHandler for FileSystemResource {
 
         let mime_type = self.get_mime_type(&canonical_target);
 
-        Ok(vec![ResourceContent {
+        Ok(vec![ResourceContents::Text {
             uri: uri.to_string(),
             mime_type: Some(mime_type),
-            text: Some(content),
-            blob: None,
+            text: content,
         }])
     }
 
@@ -378,9 +378,11 @@ impl ResourceHandler for FileSystemResource {
 
                     resources.push(ResourceInfo {
                         uri,
-                        name,
+                        name: Some(name),
                         description: None,
                         mime_type: Some(self.get_mime_type(&path)),
+                        annotations: None,
+                        size: None,
                     });
                 }
             }
@@ -428,9 +430,11 @@ impl ResourceBuilder {
     {
         let info = ResourceInfo {
             uri: self.uri,
-            name: self.name,
+            name: Some(self.name),
             description: self.description,
             mime_type: self.mime_type,
+            annotations: None,
+            size: None,
         };
 
         Resource::new(info, handler)
@@ -449,17 +453,24 @@ mod tests {
 
         let content = resource.read("test://resource", &params).await.unwrap();
         assert_eq!(content.len(), 1);
-        assert_eq!(content[0].text, Some("Hello, World!".to_string()));
-        assert_eq!(content[0].mime_type, Some("text/plain".to_string()));
+        match &content[0] {
+            ResourceContents::Text { text, mime_type, .. } => {
+                assert_eq!(*text, "Hello, World!".to_string());
+                assert_eq!(*mime_type, Some("text/plain".to_string()));
+            }
+            _ => panic!("Expected text content"),
+        }
     }
 
     #[test]
     fn test_resource_creation() {
         let info = ResourceInfo {
             uri: "test://resource".to_string(),
-            name: "Test Resource".to_string(),
+            name: Some("Test Resource".to_string()),
             description: Some("A test resource".to_string()),
             mime_type: Some("text/plain".to_string()),
+            annotations: None,
+            size: None,
         };
 
         let resource = Resource::new(info.clone(), TextResource::new("test".to_string(), None));
@@ -508,7 +519,7 @@ mod tests {
             .build(TextResource::new("test".to_string(), None));
 
         assert_eq!(resource.info.uri, "test://resource");
-        assert_eq!(resource.info.name, "Test Resource");
+        assert_eq!(resource.info.name, Some("Test Resource".to_string()));
         assert_eq!(
             resource.info.description,
             Some("A test resource".to_string())

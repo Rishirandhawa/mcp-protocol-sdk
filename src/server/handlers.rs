@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::core::error::{McpError, McpResult};
-use crate::protocol::{messages::*, types::*};
+use crate::protocol::{messages::*, types::*, LATEST_PROTOCOL_VERSION};
 
 /// Handler for initialization requests
 pub struct InitializeHandler;
@@ -30,10 +30,10 @@ impl InitializeHandler {
         };
 
         // Validate protocol version compatibility
-        if params.protocol_version != MCP_PROTOCOL_VERSION {
+        if params.protocol_version != LATEST_PROTOCOL_VERSION {
             return Err(McpError::Protocol(format!(
                 "Unsupported protocol version: {}. Expected: {}",
-                params.protocol_version, MCP_PROTOCOL_VERSION
+                params.protocol_version, LATEST_PROTOCOL_VERSION
             )));
         }
 
@@ -53,7 +53,7 @@ impl InitializeHandler {
         Ok(InitializeResult::new(
             server_info.clone(),
             capabilities.clone(),
-            MCP_PROTOCOL_VERSION.to_string(),
+            Some("MCP server ready for protocol 2025-03-26".to_string()),
         ))
     }
 }
@@ -83,6 +83,7 @@ impl ToolHandler {
                     name: tool.info.name.clone(),
                     description: tool.info.description.clone(),
                     input_schema: tool.info.input_schema.clone(),
+                    annotations: None,
                 }
             })
             .collect();
@@ -90,6 +91,7 @@ impl ToolHandler {
         Ok(ListToolsResult {
             tools,
             next_cursor: None,
+            meta: None,
         })
     }
 
@@ -131,6 +133,7 @@ impl ToolHandler {
         Ok(CallToolResult {
             content: result.content,
             is_error: result.is_error,
+            meta: None,
         })
     }
 }
@@ -161,6 +164,8 @@ impl ResourceHandler {
                     name: resource.info.name.clone(),
                     description: resource.info.description.clone(),
                     mime_type: resource.info.mime_type.clone(),
+                    annotations: None,
+                    size: None,
                 }
             })
             .collect();
@@ -168,6 +173,7 @@ impl ResourceHandler {
         Ok(ListResourcesResult {
             resources,
             next_cursor: None,
+            meta: None,
         })
     }
 
@@ -201,7 +207,7 @@ impl ResourceHandler {
         let query_params = HashMap::new();
         let contents = resource.handler.read(&params.uri, &query_params).await?;
 
-        Ok(ReadResourceResult { contents })
+        Ok(ReadResourceResult { contents, meta: None })
     }
 
     /// Handle resources/subscribe request
@@ -232,7 +238,7 @@ impl ResourceHandler {
 
         resource.handler.subscribe(&params.uri).await?;
 
-        Ok(SubscribeResourceResult {})
+        Ok(SubscribeResourceResult { meta: None })
     }
 
     /// Handle resources/unsubscribe request
@@ -263,7 +269,7 @@ impl ResourceHandler {
 
         resource.handler.unsubscribe(&params.uri).await?;
 
-        Ok(UnsubscribeResourceResult {})
+        Ok(UnsubscribeResourceResult { meta: None })
     }
 }
 
@@ -306,6 +312,7 @@ impl PromptHandler {
         Ok(ListPromptsResult {
             prompts,
             next_cursor: None,
+            meta: None,
         })
     }
 
@@ -347,22 +354,18 @@ impl PromptHandler {
                     PromptMessage {
                         role: msg.role,
                         content: match msg.content {
-                            crate::protocol::types::PromptContent::Text { content_type, text } => {
-                                PromptContent::Text { content_type, text }
+                            Content::Text { text, .. } => {
+                                Content::Text { text, annotations: None }
                             }
-                            crate::protocol::types::PromptContent::Image {
-                                content_type,
-                                data,
-                                mime_type,
-                            } => PromptContent::Image {
-                                content_type,
-                                data,
-                                mime_type,
-                            },
+                            Content::Image { data, mime_type, .. } => {
+                                Content::Image { data, mime_type, annotations: None }
+                            }
+                            other => other,
                         },
                     }
                 })
                 .collect(),
+            meta: None,
         })
     }
 }
@@ -401,7 +404,7 @@ impl LoggingHandler {
         // Logging level management feature planned for future implementation
         // This would typically integrate with a logging framework like tracing
 
-        Ok(SetLoggingLevelResult {})
+        Ok(SetLoggingLevelResult { meta: None })
     }
 }
 
@@ -411,7 +414,7 @@ pub struct PingHandler;
 impl PingHandler {
     /// Handle ping request
     pub async fn handle(_params: Option<Value>) -> McpResult<PingResult> {
-        Ok(PingResult {})
+        Ok(PingResult { meta: None })
     }
 }
 
@@ -468,7 +471,7 @@ pub mod notifications {
     pub fn tools_list_changed() -> McpResult<JsonRpcNotification> {
         Ok(JsonRpcNotification::new(
             methods::TOOLS_LIST_CHANGED.to_string(),
-            Some(ToolListChangedParams {}),
+            Some(ToolListChangedParams { meta: None }),
         )?)
     }
 
@@ -476,7 +479,7 @@ pub mod notifications {
     pub fn resources_list_changed() -> McpResult<JsonRpcNotification> {
         Ok(JsonRpcNotification::new(
             methods::RESOURCES_LIST_CHANGED.to_string(),
-            Some(ResourceListChangedParams {}),
+            Some(ResourceListChangedParams { meta: None }),
         )?)
     }
 
@@ -484,7 +487,7 @@ pub mod notifications {
     pub fn prompts_list_changed() -> McpResult<JsonRpcNotification> {
         Ok(JsonRpcNotification::new(
             methods::PROMPTS_LIST_CHANGED.to_string(),
-            Some(PromptListChangedParams {}),
+            Some(PromptListChangedParams { meta: None }),
         )?)
     }
 
@@ -492,7 +495,7 @@ pub mod notifications {
     pub fn resource_updated(uri: String) -> McpResult<JsonRpcNotification> {
         Ok(JsonRpcNotification::new(
             methods::RESOURCES_UPDATED.to_string(),
-            Some(ResourceUpdatedParams { uri }),
+            Some(ResourceUpdatedParams { uri, meta: None }),
         )?)
     }
 
@@ -505,9 +508,11 @@ pub mod notifications {
         Ok(JsonRpcNotification::new(
             methods::PROGRESS.to_string(),
             Some(ProgressParams {
-                progress_token,
-                progress,
+                progress_token: serde_json::Value::String(progress_token),
+                progress: progress.into(),
                 total,
+                message: None,
+                meta: None,
             }),
         )?)
     }
@@ -524,6 +529,7 @@ pub mod notifications {
                 level,
                 logger,
                 data,
+                meta: None,
             }),
         )?)
     }
@@ -548,7 +554,7 @@ mod tests {
                 "version": "1.0.0"
             },
             "capabilities": {},
-            "protocolVersion": MCP_PROTOCOL_VERSION
+            "protocolVersion": LATEST_PROTOCOL_VERSION
         });
 
         let result = InitializeHandler::handle(&server_info, &capabilities, Some(params)).await;
@@ -556,7 +562,7 @@ mod tests {
 
         let init_result = result.unwrap();
         assert_eq!(init_result.server_info.name, "test-server");
-        assert_eq!(init_result.protocol_version, MCP_PROTOCOL_VERSION);
+        assert_eq!(init_result.protocol_version, LATEST_PROTOCOL_VERSION);
     }
 
     #[tokio::test]

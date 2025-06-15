@@ -182,7 +182,6 @@ impl McpClient {
         let params = InitializeParams::new(
             self.info.clone(),
             self.capabilities.clone(),
-            MCP_PROTOCOL_VERSION.to_string(),
         );
 
         let request = JsonRpcRequest::new(
@@ -193,12 +192,8 @@ impl McpClient {
 
         let response = self.send_request(request).await?;
 
-        if let Some(error) = response.error {
-            return Err(McpError::Protocol(format!(
-                "Initialize failed: {}",
-                error.message
-            )));
-        }
+        // The send_request method will return an error if there was a JSON-RPC error
+        // so we can safely extract the result here
 
         let result: InitializeResult = serde_json::from_value(
             response
@@ -227,7 +222,7 @@ impl McpClient {
     pub async fn list_tools(&self, cursor: Option<String>) -> McpResult<ListToolsResult> {
         self.ensure_connected().await?;
 
-        let params = ListToolsParams { cursor };
+        let params = ListToolsParams { cursor, meta: None };
         let request = JsonRpcRequest::new(
             Value::from(self.next_request_id().await),
             methods::TOOLS_LIST.to_string(),
@@ -270,7 +265,7 @@ impl McpClient {
     pub async fn list_resources(&self, cursor: Option<String>) -> McpResult<ListResourcesResult> {
         self.ensure_connected().await?;
 
-        let params = ListResourcesParams { cursor };
+        let params = ListResourcesParams { cursor, meta: None };
         let request = JsonRpcRequest::new(
             Value::from(self.next_request_id().await),
             methods::RESOURCES_LIST.to_string(),
@@ -305,7 +300,7 @@ impl McpClient {
     pub async fn subscribe_resource(&self, uri: String) -> McpResult<SubscribeResourceResult> {
         self.ensure_connected().await?;
 
-        let params = SubscribeResourceParams { uri };
+        let params = SubscribeResourceParams { uri, meta: None };
         let request = JsonRpcRequest::new(
             Value::from(self.next_request_id().await),
             methods::RESOURCES_SUBSCRIBE.to_string(),
@@ -320,7 +315,7 @@ impl McpClient {
     pub async fn unsubscribe_resource(&self, uri: String) -> McpResult<UnsubscribeResourceResult> {
         self.ensure_connected().await?;
 
-        let params = UnsubscribeResourceParams { uri };
+        let params = UnsubscribeResourceParams { uri, meta: None };
         let request = JsonRpcRequest::new(
             Value::from(self.next_request_id().await),
             methods::RESOURCES_UNSUBSCRIBE.to_string(),
@@ -339,7 +334,7 @@ impl McpClient {
     pub async fn list_prompts(&self, cursor: Option<String>) -> McpResult<ListPromptsResult> {
         self.ensure_connected().await?;
 
-        let params = ListPromptsParams { cursor };
+        let params = ListPromptsParams { cursor, meta: None };
         let request = JsonRpcRequest::new(
             Value::from(self.next_request_id().await),
             methods::PROMPTS_LIST.to_string(),
@@ -424,7 +419,7 @@ impl McpClient {
         let request = JsonRpcRequest::new(
             Value::from(self.next_request_id().await),
             methods::PING.to_string(),
-            Some(PingParams {}),
+            Some(PingParams { meta: None }),
         )?;
 
         let response = self.send_request(request).await?;
@@ -435,7 +430,7 @@ impl McpClient {
     pub async fn set_logging_level(&self, level: LoggingLevel) -> McpResult<SetLoggingLevelResult> {
         self.ensure_connected().await?;
 
-        let params = SetLoggingLevelParams { level };
+        let params = SetLoggingLevelParams { level, meta: None };
         let request = JsonRpcRequest::new(
             Value::from(self.next_request_id().await),
             methods::LOGGING_SET_LEVEL.to_string(),
@@ -490,18 +485,13 @@ impl McpClient {
     where
         T: serde::de::DeserializeOwned,
     {
-        if let Some(error) = response.error {
-            return Err(McpError::Protocol(format!(
-                "Server error: {}",
-                error.message
-            )));
-        }
-
+        // JsonRpcResponse only contains successful responses
+        // Errors are handled separately by the transport layer
         let result = response
             .result
             .ok_or_else(|| McpError::Protocol("Missing result in response".to_string()))?;
 
-        serde_json::from_value(result).map_err(McpError::Serialization)
+        serde_json::from_value(result).map_err(|e| McpError::Serialization(e.to_string()))
     }
 
     /// Ensure the client is connected
@@ -658,7 +648,7 @@ mod tests {
                 version: "1.0.0".to_string(),
             },
             ServerCapabilities::default(),
-            MCP_PROTOCOL_VERSION.to_string(),
+            Some("Test client for MCP 2025-03-26".to_string()),
         );
 
         let init_response = JsonRpcResponse::success(Value::from(1), init_result.clone()).unwrap();
@@ -680,7 +670,7 @@ mod tests {
                 version: "1.0.0".to_string(),
             },
             ServerCapabilities::default(),
-            MCP_PROTOCOL_VERSION.to_string(),
+            Some("Test client for MCP 2025-03-26".to_string()),
         );
 
         let init_response = JsonRpcResponse::success(Value::from(1), init_result).unwrap();

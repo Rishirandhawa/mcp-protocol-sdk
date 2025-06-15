@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use super::types::*;
+use crate::protocol::types::*;
 
 // ============================================================================
 // Initialization Messages (2025-03-26)
@@ -176,7 +176,7 @@ pub struct ReadResourceResult {
 
 /// Parameters for the resources/subscribe request (2025-03-26)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SubscribeResourceParams {
+pub struct SubscribeParams {
     /// URI of the resource to subscribe to
     pub uri: String,
     /// Request metadata (2025-03-26)
@@ -186,7 +186,7 @@ pub struct SubscribeResourceParams {
 
 /// Result of the resources/subscribe request (2025-03-26)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SubscribeResourceResult {
+pub struct SubscribeResult {
     /// Result metadata (2025-03-26)
     #[serde(rename = "_meta", skip_serializing_if = "Option::is_none")]
     pub meta: Option<HashMap<String, serde_json::Value>>,
@@ -194,7 +194,7 @@ pub struct SubscribeResourceResult {
 
 /// Parameters for the resources/unsubscribe request (2025-03-26)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct UnsubscribeResourceParams {
+pub struct UnsubscribeParams {
     /// URI of the resource to unsubscribe from
     pub uri: String,
     /// Request metadata (2025-03-26)
@@ -204,7 +204,7 @@ pub struct UnsubscribeResourceParams {
 
 /// Result of the resources/unsubscribe request (2025-03-26)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct UnsubscribeResourceResult {
+pub struct UnsubscribeResult {
     /// Result metadata (2025-03-26)
     #[serde(rename = "_meta", skip_serializing_if = "Option::is_none")]
     pub meta: Option<HashMap<String, serde_json::Value>>,
@@ -551,9 +551,6 @@ pub mod methods {
 
     /// Progress notification (enhanced in 2025-03-26)
     pub const PROGRESS: &str = "notifications/progress";
-    
-    /// Cancelled notification (2025-03-26 NEW)
-    pub const CANCELLED: &str = "notifications/cancelled";
 }
 
 // ============================================================================
@@ -802,18 +799,6 @@ impl CreateMessageResult {
         self
     }
 }
-
-// Legacy type aliases for compatibility
-pub type SubscribeParams = SubscribeResourceParams;
-pub type SubscribeResult = SubscribeResourceResult;
-pub type UnsubscribeParams = UnsubscribeResourceParams;
-pub type UnsubscribeResult = UnsubscribeResourceResult;
-pub type ResourceListChangedParams = ResourcesListChangedNotificationParams;
-pub type ToolListChangedParams = ToolsListChangedNotificationParams;
-pub type PromptListChangedParams = PromptsListChangedNotificationParams;
-pub type ResourceUpdatedParams = ResourceUpdatedNotificationParams;
-pub type ProgressParams = ProgressNotificationParams;
-pub type LoggingMessageParams = LoggingMessageNotificationParams;
 
 #[cfg(test)]
 mod tests {

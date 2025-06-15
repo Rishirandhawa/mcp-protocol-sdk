@@ -13,8 +13,8 @@ use mcp_protocol_sdk::{
         resource::ResourceHandler,
         tool::ToolHandler,
     },
-    protocol::types::{Content, ResourceContent, ResourceInfo, ToolResult},
-    server::McpServer,
+    protocol::types::{Content, ResourceContents, ResourceInfo, ToolResult},
+    server::HttpMcpServer,
     transport::http::HttpServerTransport,
 };
 
@@ -48,6 +48,7 @@ impl ToolHandler for HttpCalculatorHandler {
                     return Ok(ToolResult {
                         content: vec![Content::text("Error: Division by zero")],
                         is_error: Some(true),
+                        meta: None,
                     });
                 }
                 a / b
@@ -61,6 +62,7 @@ impl ToolHandler for HttpCalculatorHandler {
                         operation
                     ))],
                     is_error: Some(true),
+                    meta: None,
                 });
             }
         };
@@ -71,6 +73,7 @@ impl ToolHandler for HttpCalculatorHandler {
                 a, operation, b, result
             ))],
             is_error: None,
+            meta: None,
         })
     }
 }
@@ -84,7 +87,7 @@ impl ResourceHandler for HttpStatusHandler {
         &self,
         uri: &str,
         _params: &HashMap<String, String>,
-    ) -> McpResult<Vec<ResourceContent>> {
+    ) -> McpResult<Vec<ResourceContents>> {
         match uri {
             "http://server/status" => {
                 let status = json!({
@@ -101,11 +104,10 @@ impl ResourceHandler for HttpStatusHandler {
                     "clients": "connected via HTTP"
                 });
 
-                Ok(vec![ResourceContent {
+                Ok(vec![ResourceContents::Text {
                     uri: uri.to_string(),
                     mime_type: Some("application/json".to_string()),
-                    text: Some(serde_json::to_string_pretty(&status)?),
-                    blob: None,
+                    text: serde_json::to_string_pretty(&status)?,
                 }])
             }
             "http://server/metrics" => {
@@ -117,11 +119,10 @@ impl ResourceHandler for HttpStatusHandler {
                     "transport_type": "http"
                 });
 
-                Ok(vec![ResourceContent {
+                Ok(vec![ResourceContents::Text {
                     uri: uri.to_string(),
                     mime_type: Some("application/json".to_string()),
-                    text: Some(serde_json::to_string_pretty(&metrics)?),
-                    blob: None,
+                    text: serde_json::to_string_pretty(&metrics)?,
                 }])
             }
             _ => Err(McpError::ResourceNotFound(uri.to_string())),
@@ -132,15 +133,19 @@ impl ResourceHandler for HttpStatusHandler {
         Ok(vec![
             ResourceInfo {
                 uri: "http://server/status".to_string(),
-                name: "HTTP Server Status".to_string(),
+                name: Some("HTTP Server Status".to_string()),
                 description: Some("Current status of the HTTP MCP server".to_string()),
                 mime_type: Some("application/json".to_string()),
+                annotations: None,
+                size: None,
             },
             ResourceInfo {
                 uri: "http://server/metrics".to_string(),
-                name: "HTTP Server Metrics".to_string(),
+                name: Some("HTTP Server Metrics".to_string()),
                 description: Some("Performance metrics for the HTTP transport".to_string()),
                 mime_type: Some("application/json".to_string()),
+                annotations: None,
+                size: None,
             },
         ])
     }
@@ -160,49 +165,71 @@ async fn main() -> McpResult<()> {
     #[cfg(feature = "tracing-subscriber")]
     tracing_subscriber::fmt::init();
 
-    let mut server = McpServer::new("http-mcp-server".to_string(), "1.0.0".to_string());
+    let mut http_server = HttpMcpServer::new("http-mcp-server".to_string(), "1.0.0".to_string());
+    
+    // Get a reference to the underlying server for adding tools and resources
+    let server = http_server.server().await;
 
     // Add HTTP-aware calculator tool
-    server
-        .add_tool(
-            "http_calculator".to_string(),
-            Some("Advanced calculator with HTTP transport support".to_string()),
-            json!({
-                "type": "object",
-                "properties": {
-                    "operation": {
-                        "type": "string",
-                        "enum": ["add", "subtract", "multiply", "divide", "power", "modulo"],
-                        "description": "Mathematical operation to perform",
-                        "default": "add"
+    {
+        let server_guard = server.lock().await;
+        server_guard
+            .add_tool(
+                "http_calculator".to_string(),
+                Some("Advanced calculator with HTTP transport support".to_string()),
+                json!({
+                    "type": "object",
+                    "properties": {
+                        "operation": {
+                            "type": "string",
+                            "enum": ["add", "subtract", "multiply", "divide", "power", "modulo"],
+                            "description": "Mathematical operation to perform",
+                            "default": "add"
+                        },
+                        "a": {
+                            "type": "number",
+                            "description": "First operand"
+                        },
+                        "b": {
+                            "type": "number",
+                            "description": "Second operand"
+                        }
                     },
-                    "a": {
-                        "type": "number",
-                        "description": "First operand"
-                    },
-                    "b": {
-                        "type": "number",
-                        "description": "Second operand"
-                    }
-                },
-                "required": ["a", "b"]
-            }),
-            HttpCalculatorHandler,
-        )
-        .await?;
+                    "required": ["a", "b"]
+                }),
+                HttpCalculatorHandler,
+            )
+            .await?;
 
-    // Add HTTP status resource
-    server
-        .add_resource_detailed(
-            ResourceInfo {
-                uri: "http://server/".to_string(),
-                name: "HTTP Server Resources".to_string(),
-                description: Some("HTTP server status and metrics".to_string()),
-                mime_type: Some("application/json".to_string()),
-            },
-            HttpStatusHandler,
-        )
-        .await?;
+        // Add HTTP status resources individually
+        server_guard
+            .add_resource_detailed(
+                ResourceInfo {
+                    uri: "http://server/status".to_string(),
+                    name: Some("HTTP Server Status".to_string()),
+                    description: Some("Current status of the HTTP MCP server".to_string()),
+                    mime_type: Some("application/json".to_string()),
+                    annotations: None,
+                    size: None,
+                },
+                HttpStatusHandler,
+            )
+            .await?;
+
+        server_guard
+            .add_resource_detailed(
+                ResourceInfo {
+                    uri: "http://server/metrics".to_string(),
+                    name: Some("HTTP Server Metrics".to_string()),
+                    description: Some("Performance metrics for the HTTP transport".to_string()),
+                    mime_type: Some("application/json".to_string()),
+                    annotations: None,
+                    size: None,
+                },
+                HttpStatusHandler,
+            )
+            .await?;
+    }
 
     // Start HTTP server
     tracing::info!("Starting HTTP MCP server on http://localhost:3000");
@@ -213,7 +240,7 @@ async fn main() -> McpResult<()> {
     tracing::info!("  - GET /health - Health check");
 
     let transport = HttpServerTransport::new("0.0.0.0:3000");
-    server.start(transport).await?;
+    http_server.start(transport).await?;
 
     tracing::info!("HTTP MCP server is running!");
     tracing::info!("Test with: curl -X POST http://localhost:3000/mcp -H 'Content-Type: application/json' -d '{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}}'");
@@ -222,7 +249,7 @@ async fn main() -> McpResult<()> {
     tokio::signal::ctrl_c()
         .await
         .expect("Failed to listen for ctrl+c");
-    server.stop().await?;
+    http_server.stop().await?;
 
     Ok(())
 }

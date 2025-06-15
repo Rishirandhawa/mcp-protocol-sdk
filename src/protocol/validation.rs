@@ -1,7 +1,8 @@
-//! MCP protocol validation utilities
+//! MCP protocol validation utilities (2025-03-26)
 //!
 //! This module provides validation functions for MCP protocol messages and types,
-//! ensuring that requests and responses conform to the protocol specification.
+//! ensuring that requests and responses conform to the 2025-03-26 protocol specification,
+//! including support for audio content, annotations, and enhanced capabilities.
 
 use crate::core::error::{McpError, McpResult};
 use crate::protocol::messages::*;
@@ -90,16 +91,9 @@ pub fn validate_jsonrpc_response(response: &JsonRpcResponse) -> McpResult<()> {
         return Err(McpError::Validation("jsonrpc must be '2.0'".to_string()));
     }
 
-    // Must have either result or error, but not both
-    match (&response.result, &response.error) {
-        (Some(_), Some(_)) => Err(McpError::Validation(
-            "Response cannot have both result and error".to_string(),
-        )),
-        (None, None) => Err(McpError::Validation(
-            "Response must have either result or error".to_string(),
-        )),
-        _ => Ok(()),
-    }
+    // JsonRpcResponse only has result field, not error
+    // Error responses use JsonRpcError type instead
+    Ok(())
 }
 
 /// Validates a JSON-RPC notification
@@ -140,8 +134,8 @@ pub fn validate_initialize_params(params: &InitializeParams) -> McpResult<()> {
     Ok(())
 }
 
-/// Validates tool information
-pub fn validate_tool_info(tool: &ToolInfo) -> McpResult<()> {
+/// Validates tool information (2025-03-26 with annotations)
+pub fn validate_tool_info(tool: &Tool) -> McpResult<()> {
     if tool.name.is_empty() {
         return Err(McpError::Validation(
             "Tool name cannot be empty".to_string(),
@@ -149,10 +143,15 @@ pub fn validate_tool_info(tool: &ToolInfo) -> McpResult<()> {
     }
 
     // Validate that input_schema is a valid JSON Schema object
-    if !tool.input_schema.is_object() {
+    if tool.input_schema.schema_type != "object" {
         return Err(McpError::Validation(
-            "Tool input_schema must be a JSON object".to_string(),
+            "Tool input_schema type must be 'object'".to_string(),
         ));
+    }
+
+    // Validate annotations if present
+    if let Some(annotations) = &tool.annotations {
+        validate_tool_annotations(annotations)?;
     }
 
     Ok(())
@@ -169,15 +168,15 @@ pub fn validate_call_tool_params(params: &CallToolParams) -> McpResult<()> {
     Ok(())
 }
 
-/// Validates resource information
-pub fn validate_resource_info(resource: &ResourceInfo) -> McpResult<()> {
+/// Validates resource information (2025-03-26 with annotations)
+pub fn validate_resource_info(resource: &Resource) -> McpResult<()> {
     if resource.uri.is_empty() {
         return Err(McpError::Validation(
             "Resource URI cannot be empty".to_string(),
         ));
     }
 
-    if resource.name.is_empty() {
+    if resource.name.as_ref().map_or(true, |name| name.is_empty()) {
         return Err(McpError::Validation(
             "Resource name cannot be empty".to_string(),
         ));
@@ -185,6 +184,11 @@ pub fn validate_resource_info(resource: &ResourceInfo) -> McpResult<()> {
 
     // Basic URI validation - check if it looks like a valid URI
     validate_uri(&resource.uri)?;
+
+    // Validate annotations if present
+    if let Some(annotations) = &resource.annotations {
+        validate_annotations(annotations)?;
+    }
 
     Ok(())
 }
@@ -202,28 +206,40 @@ pub fn validate_read_resource_params(params: &ReadResourceParams) -> McpResult<(
     Ok(())
 }
 
-/// Validates resource content
-pub fn validate_resource_content(content: &ResourceContent) -> McpResult<()> {
-    if content.uri.is_empty() {
-        return Err(McpError::Validation(
-            "Resource content URI cannot be empty".to_string(),
-        ));
+/// Validates resource content (2025-03-26)
+pub fn validate_resource_content(content: &ResourceContents) -> McpResult<()> {
+    match content {
+        ResourceContents::Text { uri, text, .. } => {
+            if uri.is_empty() {
+                return Err(McpError::Validation(
+                    "Resource content URI cannot be empty".to_string(),
+                ));
+            }
+            if text.is_empty() {
+                return Err(McpError::Validation(
+                    "Text resource content cannot be empty".to_string(),
+                ));
+            }
+        }
+        ResourceContents::Blob { uri, blob, .. } => {
+            if uri.is_empty() {
+                return Err(McpError::Validation(
+                    "Resource content URI cannot be empty".to_string(),
+                ));
+            }
+            if blob.is_empty() {
+                return Err(McpError::Validation(
+                    "Blob resource content cannot be empty".to_string(),
+                ));
+            }
+        }
     }
 
-    // Must have either text or blob content
-    match (&content.text, &content.blob) {
-        (Some(_), Some(_)) => Err(McpError::Validation(
-            "Resource content cannot have both text and blob".to_string(),
-        )),
-        (None, None) => Err(McpError::Validation(
-            "Resource content must have either text or blob".to_string(),
-        )),
-        _ => Ok(()),
-    }
+    Ok(())
 }
 
-/// Validates prompt information
-pub fn validate_prompt_info(prompt: &PromptInfo) -> McpResult<()> {
+/// Validates prompt information (2025-03-26)
+pub fn validate_prompt_info(prompt: &Prompt) -> McpResult<()> {
     if prompt.name.is_empty() {
         return Err(McpError::Validation(
             "Prompt name cannot be empty".to_string(),
@@ -263,11 +279,8 @@ pub fn validate_prompt_messages(messages: &[PromptMessage]) -> McpResult<()> {
     }
 
     for message in messages {
-        if message.role.is_empty() {
-            return Err(McpError::Validation(
-                "Message role cannot be empty".to_string(),
-            ));
-        }
+        // Role is an enum, so it can't be empty - validate content instead
+        validate_content(&message.content)?;
     }
 
     Ok(())
@@ -282,61 +295,46 @@ pub fn validate_sampling_messages(messages: &[SamplingMessage]) -> McpResult<()>
     }
 
     for message in messages {
-        if message.role.is_empty() {
-            return Err(McpError::Validation(
-                "Message role cannot be empty".to_string(),
-            ));
-        }
+        // Role is an enum, so it can't be empty - validate content instead
+        validate_content(&message.content)?;
     }
 
     Ok(())
 }
 
-/// Validates create message parameters
+/// Validates create message parameters (2025-03-26)
 pub fn validate_create_message_params(params: &CreateMessageParams) -> McpResult<()> {
     validate_sampling_messages(&params.messages)?;
 
-    // Validate temperature range
-    if let Some(temp) = params.temperature {
-        if !(0.0..=2.0).contains(&temp) {
-            return Err(McpError::Validation(
-                "Temperature must be between 0.0 and 2.0".to_string(),
-            ));
-        }
+    // max_tokens validation
+    if params.max_tokens == 0 {
+        return Err(McpError::Validation(
+            "max_tokens must be greater than 0".to_string(),
+        ));
     }
 
-    // Validate top_p range
-    if let Some(top_p) = params.top_p {
-        if !(0.0..=1.0).contains(&top_p) {
-            return Err(McpError::Validation(
-                "top_p must be between 0.0 and 1.0".to_string(),
-            ));
-        }
-    }
-
-    // Validate max_tokens
-    if let Some(max_tokens) = params.max_tokens {
-        if max_tokens == 0 {
-            return Err(McpError::Validation(
-                "max_tokens must be greater than 0".to_string(),
-            ));
-        }
+    // Validate model preferences if present
+    if let Some(prefs) = &params.model_preferences {
+        validate_model_preferences(prefs)?;
     }
 
     Ok(())
 }
 
-/// Validates content
+/// Validates content (2025-03-26 with audio support)
 pub fn validate_content(content: &Content) -> McpResult<()> {
     match content {
-        Content::Text { text } => {
+        Content::Text { text, annotations } => {
             if text.is_empty() {
                 return Err(McpError::Validation(
                     "Text content cannot be empty".to_string(),
                 ));
             }
+            if let Some(annotations) = annotations {
+                validate_annotations(annotations)?;
+            }
         }
-        Content::Image { data, mime_type } => {
+        Content::Image { data, mime_type, annotations } => {
             if data.is_empty() {
                 return Err(McpError::Validation(
                     "Image data cannot be empty".to_string(),
@@ -352,13 +350,156 @@ pub fn validate_content(content: &Content) -> McpResult<()> {
                     "Image MIME type must start with 'image/'".to_string(),
                 ));
             }
+            if let Some(annotations) = annotations {
+                validate_annotations(annotations)?;
+            }
+        }
+        Content::Audio { data, mime_type, annotations } => {
+            if data.is_empty() {
+                return Err(McpError::Validation(
+                    "Audio data cannot be empty".to_string(),
+                ));
+            }
+            if mime_type.is_empty() {
+                return Err(McpError::Validation(
+                    "Audio MIME type cannot be empty".to_string(),
+                ));
+            }
+            if !mime_type.starts_with("audio/") {
+                return Err(McpError::Validation(
+                    "Audio MIME type must start with 'audio/'".to_string(),
+                ));
+            }
+            if let Some(annotations) = annotations {
+                validate_annotations(annotations)?;
+            }
+        }
+        Content::Resource { resource, annotations } => {
+            if resource.uri.is_empty() {
+                return Err(McpError::Validation(
+                    "Resource URI cannot be empty".to_string(),
+                ));
+            }
+            validate_uri(&resource.uri)?;
+            if let Some(annotations) = annotations {
+                validate_annotations(annotations)?;
+            }
         }
     }
 
     Ok(())
 }
 
-/// Basic URI validation
+/// Validates annotations (2025-03-26 NEW)
+pub fn validate_annotations(_annotations: &Annotations) -> McpResult<()> {
+    // All annotation fields are optional and have valid enum values
+    // No additional validation needed for current fields
+    Ok(())
+}
+
+/// Validates tool annotations (2025-03-26 NEW)
+pub fn validate_tool_annotations(_annotations: &Annotations) -> McpResult<()> {
+    // All tool annotation fields are optional hints, so any values are valid
+    // Future versions might add specific validation rules
+    Ok(())
+}
+
+/// Validates completion reference (2025-03-26 NEW)
+pub fn validate_completion_reference(reference: &CompletionReference) -> McpResult<()> {
+    match reference {
+        CompletionReference::Prompt { name } => {
+            if name.is_empty() {
+                return Err(McpError::Validation(
+                    "Completion prompt name cannot be empty".to_string(),
+                ));
+            }
+        }
+        CompletionReference::Resource { uri } => {
+            if uri.is_empty() {
+                return Err(McpError::Validation(
+                    "Completion resource URI cannot be empty".to_string(),
+                ));
+            }
+            validate_uri(uri)?;
+        }
+        CompletionReference::Tool { name } => {
+            if name.is_empty() {
+                return Err(McpError::Validation(
+                    "Completion tool name cannot be empty".to_string(),
+                ));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validates completion argument (2025-03-26 NEW)
+pub fn validate_completion_argument(argument: &CompletionArgument) -> McpResult<()> {
+    if argument.name.is_empty() {
+        return Err(McpError::Validation(
+            "Completion argument name cannot be empty".to_string(),
+        ));
+    }
+
+    // Value can be empty (partial input)
+    Ok(())
+}
+
+/// Validates complete parameters (2025-03-26 NEW)
+pub fn validate_complete_params(params: &CompleteParams) -> McpResult<()> {
+    validate_completion_reference(&params.reference)?;
+    validate_completion_argument(&params.argument)?;
+
+    Ok(())
+}
+
+/// Validates root definition (2025-03-26 NEW)
+pub fn validate_root(root: &Root) -> McpResult<()> {
+    if root.uri.is_empty() {
+        return Err(McpError::Validation(
+            "Root URI cannot be empty".to_string(),
+        ));
+    }
+
+    // Root URIs must start with file:// for now
+    if !root.uri.starts_with("file://") {
+        return Err(McpError::Validation(
+            "Root URI must start with 'file://'".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+/// Validates model preferences (2025-03-26 enhanced)
+pub fn validate_model_preferences(preferences: &ModelPreferences) -> McpResult<()> {
+    if let Some(cost) = preferences.cost_priority {
+        if !(0.0..=1.0).contains(&cost) {
+            return Err(McpError::Validation(
+                "Cost priority must be between 0.0 and 1.0".to_string(),
+            ));
+        }
+    }
+
+    if let Some(speed) = preferences.speed_priority {
+        if !(0.0..=1.0).contains(&speed) {
+            return Err(McpError::Validation(
+                "Speed priority must be between 0.0 and 1.0".to_string(),
+            ));
+        }
+    }
+
+    if let Some(quality) = preferences.quality_priority {
+        if !(0.0..=1.0).contains(&quality) {
+            return Err(McpError::Validation(
+                "Quality priority must be between 0.0 and 1.0".to_string(),
+            ));
+        }
+    }
+
+    Ok(())
+}
 pub fn validate_uri(uri: &str) -> McpResult<()> {
     if uri.is_empty() {
         return Err(McpError::Validation("URI cannot be empty".to_string()));
@@ -374,7 +515,7 @@ pub fn validate_uri(uri: &str) -> McpResult<()> {
     Ok(())
 }
 
-/// Validates method name against MCP specification
+/// Validates method name against MCP specification (2025-03-26)
 pub fn validate_method_name(method: &str) -> McpResult<()> {
     if method.is_empty() {
         return Err(McpError::Validation(
@@ -382,14 +523,16 @@ pub fn validate_method_name(method: &str) -> McpResult<()> {
         ));
     }
 
-    // Check for valid MCP method patterns
+    // Check for valid MCP method patterns (2025-03-26)
     match method {
         methods::INITIALIZE
+        | methods::INITIALIZED
         | methods::PING
         | methods::TOOLS_LIST
         | methods::TOOLS_CALL
         | methods::TOOLS_LIST_CHANGED
         | methods::RESOURCES_LIST
+        | methods::RESOURCES_TEMPLATES_LIST  // New in 2025-03-26
         | methods::RESOURCES_READ
         | methods::RESOURCES_SUBSCRIBE
         | methods::RESOURCES_UNSUBSCRIBE
@@ -399,9 +542,13 @@ pub fn validate_method_name(method: &str) -> McpResult<()> {
         | methods::PROMPTS_GET
         | methods::PROMPTS_LIST_CHANGED
         | methods::SAMPLING_CREATE_MESSAGE
+        | methods::ROOTS_LIST  // New in 2025-03-26
+        | methods::ROOTS_LIST_CHANGED  // New in 2025-03-26
+        | methods::COMPLETION_COMPLETE  // New in 2025-03-26
         | methods::LOGGING_SET_LEVEL
         | methods::LOGGING_MESSAGE
-        | methods::PROGRESS => Ok(()),
+        | methods::PROGRESS
+        | methods::CANCELLED => Ok(()),  // New in 2025-03-26
         _ => {
             // Allow custom methods if they follow naming conventions
             if method.contains('/') || method.contains('.') {
@@ -430,14 +577,8 @@ pub fn validate_client_capabilities(_capabilities: &ClientCapabilities) -> McpRe
     Ok(())
 }
 
-/// Validates progress parameters
-pub fn validate_progress_params(params: &ProgressParams) -> McpResult<()> {
-    if params.progress_token.is_empty() {
-        return Err(McpError::Validation(
-            "Progress token cannot be empty".to_string(),
-        ));
-    }
-
+/// Validates progress parameters (2025-03-26 enhanced)
+pub fn validate_progress_params(params: &ProgressNotificationParams) -> McpResult<()> {
     if !(0.0..=1.0).contains(&params.progress) {
         return Err(McpError::Validation(
             "Progress must be between 0.0 and 1.0".to_string(),
@@ -447,8 +588,8 @@ pub fn validate_progress_params(params: &ProgressParams) -> McpResult<()> {
     Ok(())
 }
 
-/// Validates logging message parameters
-pub fn validate_logging_message_params(params: &LoggingMessageParams) -> McpResult<()> {
+/// Validates logging message parameters (2025-03-26)
+pub fn validate_logging_message_params(params: &LoggingMessageNotificationParams) -> McpResult<()> {
     // Logger name can be empty (optional), but data cannot be null
     if params.data.is_null() {
         return Err(McpError::Validation(
@@ -459,7 +600,7 @@ pub fn validate_logging_message_params(params: &LoggingMessageParams) -> McpResu
     Ok(())
 }
 
-/// Comprehensive validation for any MCP request
+/// Comprehensive validation for any MCP request (2025-03-26)
 pub fn validate_mcp_request(method: &str, params: Option<&Value>) -> McpResult<()> {
     validate_method_name(method)?;
 
@@ -500,13 +641,20 @@ pub fn validate_mcp_request(method: &str, params: Option<&Value>) -> McpResult<(
                     })?;
                 validate_create_message_params(&params)?;
             }
+            methods::COMPLETION_COMPLETE => {  // New in 2025-03-26
+                let params: CompleteParams = serde_json::from_value(params_value.clone())
+                    .map_err(|e| {
+                        McpError::Validation(format!("Invalid complete params: {}", e))
+                    })?;
+                validate_complete_params(&params)?;
+            }
             methods::PROGRESS => {
-                let params: ProgressParams = serde_json::from_value(params_value.clone())
+                let params: ProgressNotificationParams = serde_json::from_value(params_value.clone())
                     .map_err(|e| McpError::Validation(format!("Invalid progress params: {}", e)))?;
                 validate_progress_params(&params)?;
             }
             methods::LOGGING_MESSAGE => {
-                let params: LoggingMessageParams = serde_json::from_value(params_value.clone())
+                let params: LoggingMessageNotificationParams = serde_json::from_value(params_value.clone())
                     .map_err(|e| {
                         McpError::Validation(format!("Invalid logging message params: {}", e))
                     })?;
@@ -561,22 +709,31 @@ mod tests {
 
     #[test]
     fn test_validate_tool_info() {
-        let valid_tool = ToolInfo {
+        let valid_tool = Tool {
             name: "test_tool".to_string(),
             description: Some("A test tool".to_string()),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
+            input_schema: ToolInputSchema {
+                schema_type: "object".to_string(),
+                properties: Some(json!({
                     "param": {"type": "string"}
-                }
-            }),
+                }).as_object().unwrap().iter().map(|(k, v)| (k.clone(), v.clone())).collect()),
+                required: None,
+                additional_properties: std::collections::HashMap::new(),
+            },
+            annotations: None,
         };
         assert!(validate_tool_info(&valid_tool).is_ok());
 
-        let invalid_tool = ToolInfo {
+        let invalid_tool = Tool {
             name: "".to_string(),
             description: None,
-            input_schema: json!("not an object"),
+            input_schema: ToolInputSchema {
+                schema_type: "string".to_string(), // Invalid type
+                properties: None,
+                required: None,
+                additional_properties: std::collections::HashMap::new(),
+            },
+            annotations: None,
         };
         assert!(validate_tool_info(&invalid_tool).is_err());
     }
@@ -584,15 +741,14 @@ mod tests {
     #[test]
     fn test_validate_create_message_params() {
         let valid_params = CreateMessageParams {
-            messages: vec![SamplingMessage::user("Hello")],
+            messages: vec![SamplingMessage::user_text("Hello")],
             model_preferences: None,
             system_prompt: None,
             include_context: None,
-            max_tokens: Some(100),
-            temperature: Some(0.7),
-            top_p: Some(0.9),
+            max_tokens: 100,
             stop_sequences: None,
             metadata: None,
+            meta: None,
         };
         assert!(validate_create_message_params(&valid_params).is_ok());
 
@@ -601,11 +757,10 @@ mod tests {
             model_preferences: None,
             system_prompt: None,
             include_context: None,
-            max_tokens: None,
-            temperature: Some(3.0), // Invalid temperature
-            top_p: None,
+            max_tokens: 0, // Invalid max_tokens
             stop_sequences: None,
             metadata: None,
+            meta: None,
         };
         assert!(validate_create_message_params(&invalid_params).is_err());
     }
@@ -618,16 +773,29 @@ mod tests {
         let valid_image = Content::image("base64data", "image/png");
         assert!(validate_content(&valid_image).is_ok());
 
+        // Test new audio content (2025-03-26)
+        let valid_audio = Content::audio("base64data", "audio/wav");
+        assert!(validate_content(&valid_audio).is_ok());
+
         let invalid_text = Content::Text {
             text: "".to_string(),
+            annotations: None,
         };
         assert!(validate_content(&invalid_text).is_err());
 
         let invalid_image = Content::Image {
             data: "data".to_string(),
             mime_type: "text/plain".to_string(), // Invalid MIME type for image
+            annotations: None,
         };
         assert!(validate_content(&invalid_image).is_err());
+
+        let invalid_audio = Content::Audio {
+            data: "data".to_string(),
+            mime_type: "image/png".to_string(), // Invalid MIME type for audio
+            annotations: None,
+        };
+        assert!(validate_content(&invalid_audio).is_err());
     }
 
     #[test]
@@ -647,11 +815,16 @@ mod tests {
                 "version": "1.0.0"
             },
             "capabilities": {},
-            "protocolVersion": "2024-11-05"
+            "protocolVersion": "2025-03-26"
         });
 
         assert!(validate_mcp_request(methods::INITIALIZE, Some(&init_params)).is_ok());
         assert!(validate_mcp_request(methods::PING, None).is_ok());
         assert!(validate_mcp_request("", None).is_err());
+
+        // Test new 2025-03-26 methods
+        assert!(validate_mcp_request(methods::ROOTS_LIST, None).is_ok());
+        assert!(validate_mcp_request(methods::COMPLETION_COMPLETE, None).is_ok());
+        assert!(validate_mcp_request(methods::RESOURCES_TEMPLATES_LIST, None).is_ok());
     }
 }

@@ -195,7 +195,7 @@ impl Transport for WebSocketClientTransport {
 
         // Send the request
         let request_text =
-            serde_json::to_string(&request).map_err(|e| McpError::Serialization(e))?;
+            serde_json::to_string(&request).map_err(|e| McpError::Serialization(e.to_string()))?;
 
         tracing::trace!("Sending WebSocket request: {}", request_text);
 
@@ -214,7 +214,7 @@ impl Transport for WebSocketClientTransport {
 
     async fn send_notification(&mut self, notification: JsonRpcNotification) -> McpResult<()> {
         let notification_text =
-            serde_json::to_string(&notification).map_err(|e| McpError::Serialization(e))?;
+            serde_json::to_string(&notification).map_err(|e| McpError::Serialization(e.to_string()))?;
 
         tracing::trace!("Sending WebSocket notification: {}", notification_text);
 
@@ -275,7 +275,7 @@ impl Transport for WebSocketClientTransport {
 /// Connection state for a WebSocket client
 struct WebSocketConnection {
     sender: SplitSink<WebSocketStream<TcpStream>, Message>,
-    id: String,
+    _id: String, // Keep for future connection tracking/debugging
 }
 
 /// WebSocket transport for MCP servers
@@ -284,7 +284,7 @@ struct WebSocketConnection {
 /// allowing multiple concurrent clients with bidirectional communication.
 pub struct WebSocketServerTransport {
     bind_addr: String,
-    config: TransportConfig,
+    config: TransportConfig, // Used for connection timeouts and limits
     clients: Arc<RwLock<HashMap<String, WebSocketConnection>>>,
     request_handler: Arc<
         RwLock<
@@ -351,6 +351,16 @@ impl WebSocketServerTransport {
         *request_handler = Some(Arc::new(handler));
     }
 
+    /// Get the current configuration
+    pub fn config(&self) -> &TransportConfig {
+        &self.config
+    }
+
+    /// Get the maximum message size from config
+    pub fn max_message_size(&self) -> Option<usize> {
+        self.config.max_message_size
+    }
+
     async fn handle_client_connection(
         stream: TcpStream,
         clients: Arc<RwLock<HashMap<String, WebSocketConnection>>>,
@@ -379,7 +389,7 @@ impl WebSocketServerTransport {
 
         tracing::info!("New WebSocket client connected: {}", client_id);
 
-        let (mut ws_sender, mut ws_receiver) = ws_stream.split();
+        let (ws_sender, mut ws_receiver) = ws_stream.split();
 
         // Add client to the connections map
         {
@@ -388,7 +398,7 @@ impl WebSocketServerTransport {
                 client_id.clone(),
                 WebSocketConnection {
                     sender: ws_sender,
-                    id: client_id.clone(),
+                    _id: client_id.clone(),
                 },
             );
         }
@@ -567,18 +577,13 @@ impl ServerTransport for WebSocketServerTransport {
                 jsonrpc: "2.0".to_string(),
                 id: request.id,
                 result: None,
-                error: Some(crate::protocol::types::JsonRpcError {
-                    code: crate::protocol::types::METHOD_NOT_FOUND,
-                    message: "No request handler configured".to_string(),
-                    data: None,
-                }),
             })
         }
     }
 
     async fn send_notification(&mut self, notification: JsonRpcNotification) -> McpResult<()> {
         let notification_text =
-            serde_json::to_string(&notification).map_err(|e| McpError::Serialization(e))?;
+            serde_json::to_string(&notification).map_err(|e| McpError::Serialization(e.to_string()))?;
 
         let mut clients_guard = self.clients.write().await;
         let mut disconnected_clients = Vec::new();
@@ -641,7 +646,6 @@ impl ServerTransport for WebSocketServerTransport {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     #[test]
     fn test_websocket_server_creation() {

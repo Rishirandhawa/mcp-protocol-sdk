@@ -6,5 +6,13 @@ pub mod handlers;
 pub mod lifecycle;
 pub mod mcp_server;
 
+// HTTP-specific server implementation (when HTTP feature is enabled)
+#[cfg(feature = "http")]
+pub mod http_server;
+
 // Re-export the main server type
 pub use mcp_server::McpServer;
+
+// Re-export HTTP server when feature is enabled
+#[cfg(feature = "http")]
+pub use http_server::HttpMcpServer;

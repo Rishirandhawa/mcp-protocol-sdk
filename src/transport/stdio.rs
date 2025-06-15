@@ -14,7 +14,7 @@ use tokio::sync::{mpsc, Mutex};
 use tokio::time::{timeout, Duration};
 
 use crate::core::error::{McpError, McpResult};
-use crate::protocol::types::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
+use crate::protocol::types::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse, error_codes};
 use crate::transport::traits::{ConnectionState, ServerTransport, Transport, TransportConfig};
 
 /// STDIO transport for MCP clients
@@ -382,10 +382,29 @@ impl ServerTransport for StdioServerTransport {
                     // Parse the request
                     match serde_json::from_str::<JsonRpcRequest>(line) {
                         Ok(request) => {
-                            let response = self.handle_request(request).await?;
+                            let response_or_error = match self.handle_request(request.clone()).await {
+                                Ok(response) => serde_json::to_string(&response),
+                                Err(error) => {
+                                    // Convert McpError to JsonRpcError
+                                    let json_rpc_error = crate::protocol::types::JsonRpcError {
+                                        jsonrpc: "2.0".to_string(),
+                                        id: request.id,
+                                        error: crate::protocol::types::ErrorObject {
+                                            code: match error {
+                                                McpError::Protocol(ref msg) if msg.contains("not found") => {
+                                                    error_codes::METHOD_NOT_FOUND
+                                                }
+                                                _ => crate::protocol::types::error_codes::INTERNAL_ERROR,
+                                            },
+                                            message: error.to_string(),
+                                            data: None,
+                                        },
+                                    };
+                                    serde_json::to_string(&json_rpc_error)
+                                }
+                            };
 
-                            let response_line = serde_json::to_string(&response)
-                                .map_err(McpError::serialization)?;
+                            let response_line = response_or_error.map_err(McpError::serialization)?;
 
                             tracing::trace!("Sending: {}", response_line);
 
@@ -420,17 +439,8 @@ impl ServerTransport for StdioServerTransport {
     }
 
     async fn handle_request(&mut self, request: JsonRpcRequest) -> McpResult<JsonRpcResponse> {
-        // Default implementation - return method not found
-        Ok(JsonRpcResponse {
-            jsonrpc: "2.0".to_string(),
-            id: request.id,
-            result: None,
-            error: Some(crate::protocol::types::JsonRpcError {
-                code: crate::protocol::types::METHOD_NOT_FOUND,
-                message: format!("Method '{}' not found", request.method),
-                data: None,
-            }),
-        })
+        // Default implementation - return method not found error
+        Err(McpError::protocol(format!("Method '{}' not found", request.method)))
     }
 
     async fn send_notification(&mut self, notification: JsonRpcNotification) -> McpResult<()> {
@@ -525,14 +535,13 @@ mod tests {
             params: None,
         };
 
-        let response = transport.handle_request(request).await.unwrap();
-        assert_eq!(response.jsonrpc, "2.0");
-        assert_eq!(response.id, json!(1));
-        assert!(response.error.is_some());
-        assert!(response.result.is_none());
-
-        let error = response.error.unwrap();
-        assert_eq!(error.code, crate::protocol::types::METHOD_NOT_FOUND);
+        let result = transport.handle_request(request).await;
+        assert!(result.is_err());
+        
+        match result.unwrap_err() {
+            McpError::Protocol(msg) => assert!(msg.contains("unknown_method")),
+            _ => panic!("Expected Protocol error"),
+        }
     }
 
     // Note: Integration tests with actual processes would go in tests/integration/

@@ -152,7 +152,7 @@ pub struct RootsCapability {
 // ============================================================================
 
 /// Tool behavior annotations (2025-03-26)
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Annotations {
     /// Target audience for this tool
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -208,9 +208,6 @@ pub struct TextContent {
     pub content_type: String, // "text"
     /// The text content
     pub text: String,
-    /// Content annotations (2025-03-26)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub annotations: Option<Annotations>,
 }
 
 /// Image content
@@ -224,9 +221,6 @@ pub struct ImageContent {
     /// MIME type of the image
     #[serde(rename = "mimeType")]
     pub mime_type: String,
-    /// Content annotations (2025-03-26)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub annotations: Option<Annotations>,
 }
 
 /// Audio content (2025-03-26 NEW)
@@ -240,9 +234,6 @@ pub struct AudioContent {
     /// MIME type of the audio
     #[serde(rename = "mimeType")]
     pub mime_type: String,
-    /// Content annotations (2025-03-26)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub annotations: Option<Annotations>,
 }
 
 /// Embedded resource content (2025-03-26)
@@ -253,9 +244,6 @@ pub struct EmbeddedResource {
     pub content_type: String, // "resource"
     /// Resource reference
     pub resource: ResourceReference,
-    /// Content annotations (2025-03-26)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub annotations: Option<Annotations>,
 }
 
 /// Resource reference for embedded resources
@@ -274,9 +262,6 @@ pub enum Content {
     Text {
         /// The text content
         text: String,
-        /// Content annotations (2025-03-26)
-        #[serde(skip_serializing_if = "Option::is_none")]
-        annotations: Option<Annotations>,
     },
     /// Image content
     #[serde(rename = "image")]
@@ -286,9 +271,6 @@ pub enum Content {
         /// MIME type of the image
         #[serde(rename = "mimeType")]
         mime_type: String,
-        /// Content annotations (2025-03-26)
-        #[serde(skip_serializing_if = "Option::is_none")]
-        annotations: Option<Annotations>,
     },
     /// Audio content (2025-03-26 NEW)
     #[serde(rename = "audio")]
@@ -298,18 +280,12 @@ pub enum Content {
         /// MIME type of the audio
         #[serde(rename = "mimeType")]
         mime_type: String,
-        /// Content annotations (2025-03-26)
-        #[serde(skip_serializing_if = "Option::is_none")]
-        annotations: Option<Annotations>,
     },
     /// Embedded resource content (2025-03-26 NEW)
     #[serde(rename = "resource")]
     Resource {
         /// Resource reference
         resource: ResourceReference,
-        /// Content annotations (2025-03-26)
-        #[serde(skip_serializing_if = "Option::is_none")]
-        annotations: Option<Annotations>,
     },
 }
 
@@ -363,10 +339,6 @@ pub struct CallToolResult {
     pub meta: Option<HashMap<String, serde_json::Value>>,
 }
 
-// Re-export types with legacy names for compatibility
-pub type ToolInfo = Tool;
-pub type ToolResult = CallToolResult;
-
 // ============================================================================
 // Resource Types (2025-03-26)
 // ============================================================================
@@ -385,12 +357,6 @@ pub struct Resource {
     /// MIME type of the resource
     #[serde(rename = "mimeType", skip_serializing_if = "Option::is_none")]
     pub mime_type: Option<String>,
-    /// Resource annotations (2025-03-26)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub annotations: Option<Annotations>,
-    /// Resource size in bytes (2025-03-26)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub size: Option<u64>,
 }
 
 /// Resource template for URI patterns
@@ -435,9 +401,6 @@ pub enum ResourceContents {
         blob: String,
     },
 }
-
-// Legacy type aliases for compatibility
-pub type ResourceInfo = Resource;
 
 // ============================================================================
 // Prompt Types (2025-03-26)
@@ -498,10 +461,6 @@ pub struct GetPromptResult {
     #[serde(rename = "_meta", skip_serializing_if = "Option::is_none")]
     pub meta: Option<HashMap<String, serde_json::Value>>,
 }
-
-// Legacy type aliases for compatibility
-pub type PromptInfo = Prompt;
-pub type PromptResult = GetPromptResult;
 
 // ============================================================================
 // Sampling Types (2025-03-26)
@@ -729,6 +688,14 @@ pub struct NotificationParams {
     pub params: HashMap<String, serde_json::Value>,
 }
 
+/// Base result with annotations support
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Result {
+    /// Result annotations (2025-03-26 NEW)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<Annotations>,
+}
+
 // ============================================================================
 // Pagination Support
 // ============================================================================
@@ -756,10 +723,7 @@ pub struct PaginatedResult {
 impl Content {
     /// Create text content
     pub fn text<S: Into<String>>(text: S) -> Self {
-        Self::Text { 
-            text: text.into(),
-            annotations: None,
-        }
+        Self::Text { text: text.into() }
     }
 
     /// Create image content
@@ -767,7 +731,6 @@ impl Content {
         Self::Image {
             data: data.into(),
             mime_type: mime_type.into(),
-            annotations: None,
         }
     }
 
@@ -776,7 +739,6 @@ impl Content {
         Self::Audio {
             data: data.into(),
             mime_type: mime_type.into(),
-            annotations: None,
         }
     }
 
@@ -784,7 +746,6 @@ impl Content {
     pub fn resource<S: Into<String>>(uri: S) -> Self {
         Self::Resource {
             resource: ResourceReference { uri: uri.into() },
-            annotations: None,
         }
     }
 }
@@ -828,6 +789,12 @@ impl Annotations {
     }
 }
 
+impl Default for Annotations {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Tool {
     /// Create a new tool
     pub fn new<S: Into<String>>(name: S, description: S) -> Self {
@@ -857,7 +824,7 @@ impl JsonRpcRequest {
         id: RequestId,
         method: String,
         params: Option<T>,
-    ) -> std::result::Result<Self, serde_json::Error> {
+    ) -> Result<Self, serde_json::Error> {
         let params = match params {
             Some(p) => Some(serde_json::to_value(p)?),
             None => None,
@@ -877,7 +844,7 @@ impl JsonRpcResponse {
     pub fn success<T: Serialize>(
         id: RequestId,
         result: T,
-    ) -> std::result::Result<Self, serde_json::Error> {
+    ) -> Result<Self, serde_json::Error> {
         Ok(Self {
             jsonrpc: JSONRPC_VERSION.to_string(),
             id,
@@ -903,25 +870,6 @@ impl JsonRpcError {
                 data,
             },
         }
-    }
-}
-
-impl JsonRpcNotification {
-    /// Create a new JSON-RPC notification
-    pub fn new<T: Serialize>(
-        method: String,
-        params: Option<T>,
-    ) -> std::result::Result<Self, serde_json::Error> {
-        let params = match params {
-            Some(p) => Some(serde_json::to_value(p)?),
-            None => None,
-        };
-
-        Ok(Self {
-            jsonrpc: JSONRPC_VERSION.to_string(),
-            method,
-            params,
-        })
     }
 }
 
@@ -1008,7 +956,7 @@ mod tests {
     fn test_jsonrpc_batching() {
         let req1 = JsonRpcRequest::new(json!(1), "method1".to_string(), Some(json!({})))
             .unwrap();
-        let req2 = JsonRpcRequest::new::<serde_json::Value>(json!(2), "method2".to_string(), None)
+        let req2 = JsonRpcRequest::new(json!(2), "method2".to_string(), None)
             .unwrap();
 
         let batch: JsonRpcBatchRequest = vec![

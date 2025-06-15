@@ -489,8 +489,8 @@ impl NotificationHandler for ProgressHandler {
             if let Some(params) = notification.params {
                 if let Ok(progress_params) = serde_json::from_value::<ProgressParams>(params) {
                     (self.callback)(
-                        progress_params.progress_token,
-                        progress_params.progress,
+                        progress_params.progress_token.to_string(),
+                        progress_params.progress as f32,
                         progress_params.total,
                     );
                 }
@@ -554,10 +554,10 @@ mod tests {
                     version: "1.0.0".to_string(),
                 },
                 ServerCapabilities::default(),
-                MCP_PROTOCOL_VERSION.to_string(),
+                Some("MCP client session for 2025-03-26".to_string()),
             );
             JsonRpcResponse::success(serde_json::Value::from(1), init_result)
-                .map_err(McpError::Serialization)
+                .map_err(|e| McpError::Serialization(e.to_string()))
         }
 
         async fn send_notification(&mut self, _notification: JsonRpcNotification) -> McpResult<()> {

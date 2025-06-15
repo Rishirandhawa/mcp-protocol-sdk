@@ -13,7 +13,7 @@ use mcp_protocol_sdk::{
         resource::ResourceHandler,
         tool::ToolHandler,
     },
-    protocol::types::{Content, ResourceContent, ResourceInfo, ToolResult},
+    protocol::types::{Content, ResourceContents, ResourceInfo, ToolResult},
     server::McpServer,
     transport::websocket::WebSocketServerTransport,
 };
@@ -72,6 +72,7 @@ impl ToolHandler for WebSocketEchoHandler {
         Ok(ToolResult {
             content: vec![Content::text(response)],
             is_error: None,
+            meta: None,
         })
     }
 }
@@ -97,14 +98,7 @@ impl ToolHandler for WebSocketChatHandler {
             .and_then(|v| v.as_str())
             .unwrap_or("general");
 
-        let chat_message = json!({
-            "type": "chat_message",
-            "username": username,
-            "message": message,
-            "room": room,
-            "timestamp": "now",
-            "transport": "websocket"
-        });
+
 
         Ok(ToolResult {
             content: vec![Content::text(format!(
@@ -112,6 +106,7 @@ impl ToolHandler for WebSocketChatHandler {
                 room, username, message
             ))],
             is_error: None,
+            meta: None,
         })
     }
 }
@@ -125,7 +120,7 @@ impl ResourceHandler for WebSocketStatusHandler {
         &self,
         uri: &str,
         _params: &HashMap<String, String>,
-    ) -> McpResult<Vec<ResourceContent>> {
+    ) -> McpResult<Vec<ResourceContents>> {
         match uri {
             "ws://server/status" => {
                 let status = json!({
@@ -145,11 +140,10 @@ impl ResourceHandler for WebSocketStatusHandler {
                     ]
                 });
 
-                Ok(vec![ResourceContent {
+                Ok(vec![ResourceContents::Text {
                     uri: uri.to_string(),
                     mime_type: Some("application/json".to_string()),
-                    text: Some(serde_json::to_string_pretty(&status)?),
-                    blob: None,
+                    text: serde_json::to_string_pretty(&status)?,
                 }])
             }
             "ws://server/connections" => {
@@ -174,11 +168,10 @@ impl ResourceHandler for WebSocketStatusHandler {
                     "protocol_version": "MCP/WebSocket 1.0"
                 });
 
-                Ok(vec![ResourceContent {
+                Ok(vec![ResourceContents::Text {
                     uri: uri.to_string(),
                     mime_type: Some("application/json".to_string()),
-                    text: Some(serde_json::to_string_pretty(&connections)?),
-                    blob: None,
+                    text: serde_json::to_string_pretty(&connections)?,
                 }])
             }
             _ => Err(McpError::ResourceNotFound(uri.to_string())),
@@ -189,19 +182,23 @@ impl ResourceHandler for WebSocketStatusHandler {
         Ok(vec![
             ResourceInfo {
                 uri: "ws://server/status".to_string(),
-                name: "WebSocket Server Status".to_string(),
+                name: Some("WebSocket Server Status".to_string()),
                 description: Some(
                     "Current status and capabilities of WebSocket server".to_string(),
                 ),
                 mime_type: Some("application/json".to_string()),
+                annotations: None,
+                size: None,
             },
             ResourceInfo {
                 uri: "ws://server/connections".to_string(),
-                name: "Active WebSocket Connections".to_string(),
+                name: Some("Active WebSocket Connections".to_string()),
                 description: Some(
                     "Information about currently connected WebSocket clients".to_string(),
                 ),
                 mime_type: Some("application/json".to_string()),
+                annotations: None,
+                size: None,
             },
         ])
     }
@@ -292,27 +289,29 @@ async fn main() -> McpResult<()> {
         .add_resource_detailed(
             ResourceInfo {
                 uri: "ws://server/".to_string(),
-                name: "WebSocket Server Resources".to_string(),
+                name: Some("WebSocket Server Resources".to_string()),
                 description: Some("WebSocket server status and connection information".to_string()),
                 mime_type: Some("application/json".to_string()),
+                annotations: None,
+                size: None,
             },
             WebSocketStatusHandler,
         )
         .await?;
 
     // Start WebSocket server
-    tracing::info!("Starting WebSocket MCP server on ws://localhost:8080");
+    tracing::info!("Starting WebSocket MCP server on ws://localhost:8081");
     tracing::info!("Features:");
     tracing::info!("  - Bidirectional real-time communication");
     tracing::info!("  - Multiple concurrent connections");
     tracing::info!("  - Automatic message routing");
     tracing::info!("  - Low-latency responses");
 
-    let transport = WebSocketServerTransport::new("0.0.0.0:8080");
+    let transport = WebSocketServerTransport::new("0.0.0.0:8081");
     server.start(transport).await?;
 
     tracing::info!("WebSocket MCP server is running!");
-    tracing::info!("Connect with a WebSocket client to: ws://localhost:8080");
+    tracing::info!("Connect with a WebSocket client to: ws://localhost:8081");
     tracing::info!("Test tools: ws_echo, ws_chat");
     tracing::info!("Test resources: ws://server/status, ws://server/connections");
 

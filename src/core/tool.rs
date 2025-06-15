@@ -8,7 +8,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::core::error::{McpError, McpResult};
-use crate::protocol::types::{Content, ToolInfo, ToolResult};
+use crate::protocol::types::{Content, ToolInfo, ToolResult, ToolInputSchema};
 
 /// Trait for implementing tool handlers
 #[async_trait]
@@ -54,7 +54,20 @@ impl Tool {
             info: ToolInfo {
                 name,
                 description,
-                input_schema,
+                input_schema: ToolInputSchema {
+                    schema_type: "object".to_string(),
+                    properties: input_schema.get("properties").and_then(|p| p.as_object()).map(|obj| {
+                        obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+                    }),
+                    required: input_schema.get("required").and_then(|r| r.as_array()).map(|arr| {
+                        arr.iter().filter_map(|v| v.as_str().map(String::from)).collect()
+                    }),
+                    additional_properties: input_schema.as_object().unwrap_or(&serde_json::Map::new()).iter()
+                        .filter(|(k, _)| !["type", "properties", "required"].contains(&k.as_str()))
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect(),
+                },
+                annotations: None,
             },
             handler: Box::new(handler),
             enabled: true,
@@ -163,8 +176,10 @@ impl ToolHandler for EchoTool {
         Ok(ToolResult {
             content: vec![Content::Text {
                 text: message.to_string(),
+                annotations: None,
             }],
             is_error: None,
+            meta: None,
         })
     }
 }
@@ -190,8 +205,10 @@ impl ToolHandler for AdditionTool {
         Ok(ToolResult {
             content: vec![Content::Text {
                 text: result.to_string(),
+                annotations: None,
             }],
             is_error: None,
+            meta: None,
         })
     }
 }
@@ -212,8 +229,10 @@ impl ToolHandler for TimestampTool {
         Ok(ToolResult {
             content: vec![Content::Text {
                 text: timestamp.to_string(),
+                annotations: None,
             }],
             is_error: None,
+            meta: None,
         })
     }
 }
@@ -277,7 +296,7 @@ mod tests {
 
         let result = tool.call(args).await.unwrap();
         match &result.content[0] {
-            Content::Text { text } => assert_eq!(text, "test message"),
+            Content::Text { text, .. } => assert_eq!(text, "test message"),
             _ => panic!("Expected text content"),
         }
     }
@@ -291,7 +310,7 @@ mod tests {
 
         let result = tool.call(args).await.unwrap();
         match &result.content[0] {
-            Content::Text { text } => assert_eq!(text, "8"),
+            Content::Text { text, .. } => assert_eq!(text, "8"),
             _ => panic!("Expected text content"),
         }
     }

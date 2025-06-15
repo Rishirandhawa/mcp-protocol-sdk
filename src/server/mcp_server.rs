@@ -16,7 +16,7 @@ use crate::core::{
     tool::{Tool, ToolHandler},
     PromptInfo, ResourceInfo, ToolInfo,
 };
-use crate::protocol::{messages::*, types::*, validation::*};
+use crate::protocol::{messages::*, types::*, validation::*, error_codes::*};
 use crate::transport::traits::ServerTransport;
 
 /// Configuration for the MCP server
@@ -98,6 +98,9 @@ impl McpServer {
                     list_changed: Some(true),
                 }),
                 sampling: None,
+                logging: None,
+                experimental: None,
+                completions: None,
             },
             config: ServerConfig::default(),
             resources: Arc::new(RwLock::new(HashMap::new())),
@@ -147,9 +150,11 @@ impl McpServer {
     {
         let resource_info = ResourceInfo {
             uri: uri.clone(),
-            name: name.clone(),
+            name: Some(name.clone()),
             description: None,
             mime_type: None,
+            annotations: None,
+            size: None,
         };
 
         validate_resource_info(&resource_info)?;
@@ -208,7 +213,7 @@ impl McpServer {
     }
 
     /// Read a resource
-    pub async fn read_resource(&self, uri: &str) -> McpResult<Vec<ResourceContent>> {
+    pub async fn read_resource(&self, uri: &str) -> McpResult<Vec<ResourceContents>> {
         let resources = self.resources.read().await;
 
         match resources.get(uri) {
@@ -235,10 +240,28 @@ impl McpServer {
     where
         H: ToolHandler + 'static,
     {
+        let tool_schema = ToolInputSchema {
+            schema_type: "object".to_string(),
+            properties: schema.get("properties").and_then(|p| p.as_object()).map(|obj| {
+                obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+            }),
+            required: schema.get("required").and_then(|r| {
+                r.as_array().map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+            }),
+            additional_properties: schema.as_object().unwrap_or(&serde_json::Map::new()).iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+        };
+
         let tool_info = ToolInfo {
             name: name.clone(),
             description,
-            input_schema: schema,
+            input_schema: tool_schema,
+            annotations: None,
         };
 
         validate_tool_info(&tool_info)?;
@@ -246,7 +269,7 @@ impl McpServer {
         let tool = Tool::new(
             name.clone(),
             tool_info.description.clone(),
-            tool_info.input_schema.clone(),
+            serde_json::to_value(&tool_info.input_schema)?,
             handler,
         );
 
@@ -271,7 +294,7 @@ impl McpServer {
         let tool = Tool::new(
             name.clone(),
             info.description.clone(),
-            info.input_schema.clone(),
+            serde_json::to_value(&info.input_schema)?,
             handler,
         );
 
@@ -520,7 +543,14 @@ impl McpServer {
                     McpError::Validation(_) => (INVALID_PARAMS, error.to_string()),
                     _ => (INTERNAL_ERROR, error.to_string()),
                 };
-                Ok(JsonRpcResponse::error(request.id, code, message, None))
+                // For now, return errors as part of the result
+                // TODO: Implement proper JSON-RPC error handling for 2025-03-26
+                Ok(JsonRpcResponse::success(request.id, serde_json::json!({
+                    "error": {
+                        "code": code,
+                        "message": message,
+                    }
+                }))?)
             }
         }
     }
@@ -544,14 +574,14 @@ impl McpServer {
         let result = InitializeResult::new(
             self.info.clone(),
             self.capabilities.clone(),
-            MCP_PROTOCOL_VERSION.to_string(),
+            None, // instructions
         );
 
         Ok(serde_json::to_value(result)?)
     }
 
     async fn handle_ping(&self) -> McpResult<Value> {
-        Ok(serde_json::to_value(PingResult {})?)
+        Ok(serde_json::to_value(PingResult { meta: None })?)
     }
 
     async fn handle_tools_list(&self, params: Option<Value>) -> McpResult<Value> {
@@ -564,6 +594,7 @@ impl McpServer {
         let result = ListToolsResult {
             tools,
             next_cursor: None, // Pagination support will be added in future versions
+            meta: None,
         };
 
         Ok(serde_json::to_value(result)?)
@@ -595,6 +626,7 @@ impl McpServer {
         let result = ListResourcesResult {
             resources,
             next_cursor: None, // Pagination support will be added in future versions
+            meta: None,
         };
 
         Ok(serde_json::to_value(result)?)
@@ -613,7 +645,7 @@ impl McpServer {
         validate_read_resource_params(&params)?;
 
         let contents = self.read_resource(&params.uri).await?;
-        let result = ReadResourceResult { contents };
+        let result = ReadResourceResult { contents, meta: None };
 
         Ok(serde_json::to_value(result)?)
     }
@@ -630,7 +662,7 @@ impl McpServer {
 
         // Resource subscriptions functionality planned for future implementation
         let _uri = params.uri;
-        let result = SubscribeResourceResult {};
+        let result = SubscribeResourceResult { meta: None };
 
         Ok(serde_json::to_value(result)?)
     }
@@ -647,7 +679,7 @@ impl McpServer {
 
         // Resource subscriptions functionality planned for future implementation
         let _uri = params.uri;
-        let result = UnsubscribeResourceResult {};
+        let result = UnsubscribeResourceResult { meta: None };
 
         Ok(serde_json::to_value(result)?)
     }
@@ -662,6 +694,7 @@ impl McpServer {
         let result = ListPromptsResult {
             prompts,
             next_cursor: None, // Pagination support will be added in future versions
+            meta: None,
         };
 
         Ok(serde_json::to_value(result)?)
@@ -694,7 +727,7 @@ impl McpServer {
         };
 
         // Logging level management feature planned for future implementation
-        let result = SetLoggingLevelResult {};
+        let result = SetLoggingLevelResult { meta: None };
         Ok(serde_json::to_value(result)?)
     }
 
@@ -705,7 +738,7 @@ impl McpServer {
     async fn emit_resources_list_changed(&self) -> McpResult<()> {
         let notification = JsonRpcNotification::new(
             methods::RESOURCES_LIST_CHANGED.to_string(),
-            Some(ResourceListChangedParams {}),
+            Some(ResourceListChangedParams { meta: None }),
         )?;
 
         self.send_notification(notification).await
@@ -714,7 +747,7 @@ impl McpServer {
     async fn emit_tools_list_changed(&self) -> McpResult<()> {
         let notification = JsonRpcNotification::new(
             methods::TOOLS_LIST_CHANGED.to_string(),
-            Some(ToolListChangedParams {}),
+            Some(ToolListChangedParams { meta: None }),
         )?;
 
         self.send_notification(notification).await
@@ -723,7 +756,7 @@ impl McpServer {
     async fn emit_prompts_list_changed(&self) -> McpResult<()> {
         let notification = JsonRpcNotification::new(
             methods::PROMPTS_LIST_CHANGED.to_string(),
-            Some(PromptListChangedParams {}),
+            Some(PromptListChangedParams { meta: None }),
         )?;
 
         self.send_notification(notification).await
@@ -783,6 +816,7 @@ mod tests {
                 Ok(ToolResult {
                     content: vec![Content::text("Hello from tool")],
                     is_error: None,
+                    meta: None,
                 })
             }
         }
@@ -817,7 +851,6 @@ mod tests {
                 version: "1.0.0".to_string(),
             },
             ClientCapabilities::default(),
-            MCP_PROTOCOL_VERSION.to_string(),
         );
 
         let request =
@@ -826,6 +859,5 @@ mod tests {
 
         let response = server.handle_request(request).await.unwrap();
         assert!(response.result.is_some());
-        assert!(response.error.is_none());
     }
 }

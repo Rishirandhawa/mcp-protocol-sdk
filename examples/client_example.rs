@@ -12,7 +12,7 @@ use mcp_protocol_sdk::{
     client::{ClientSession, McpClient},
     core::error::McpResult,
     transport::stdio::StdioClientTransport,
-    Content, PromptContent,
+    Content,
 };
 
 #[tokio::main]
@@ -114,7 +114,7 @@ async fn demonstrate_operations(
                 tracing::info!("Calculator result:");
                 for content in &result.content {
                     match content {
-                        Content::Text { text } => {
+                        Content::Text { text, .. } => {
                             tracing::info!("  {}", text);
                         }
                         _ => tracing::info!("  (non-text content)"),
@@ -139,7 +139,7 @@ async fn demonstrate_operations(
                 tracing::info!("Echo result:");
                 for content in &result.content {
                     match content {
-                        Content::Text { text } => {
+                        Content::Text { text, .. } => {
                             tracing::info!("  {}", text);
                         }
                         _ => tracing::info!("  (non-text content)"),
@@ -160,7 +160,7 @@ async fn demonstrate_operations(
         for resource in &resources_result.resources {
             tracing::info!(
                 "  - {}: {} ({})",
-                resource.name,
+                resource.name.as_deref().unwrap_or("Unknown"),
                 resource.uri,
                 resource.mime_type.as_deref().unwrap_or("unknown type")
             );
@@ -178,8 +178,13 @@ async fn demonstrate_operations(
             Ok(result) => {
                 tracing::info!("Resource content:");
                 for content in &result.contents {
-                    if let Some(text) = &content.text {
-                        tracing::info!("  {}", text);
+                    match content {
+                        mcp_protocol_sdk::ResourceContents::Text { text, .. } => {
+                            tracing::info!("  {}", text);
+                        }
+                        mcp_protocol_sdk::ResourceContents::Blob { .. } => {
+                            tracing::info!("  (binary content)");
+                        }
                     }
                 }
             }
@@ -206,7 +211,7 @@ async fn demonstrate_operations(
                         "    - {}: {} (required: {})",
                         arg.name,
                         arg.description.as_deref().unwrap_or("No description"),
-                        arg.required
+                        arg.required.unwrap_or(false)
                     );
                 }
             }
@@ -231,9 +236,9 @@ async fn demonstrate_operations(
                     tracing::info!("  Description: {}", description);
                 }
                 for (i, message) in result.messages.iter().enumerate() {
-                    tracing::info!("  Message {}: [{}]", i + 1, message.role);
+                    tracing::info!("  Message {}: [{:?}]", i + 1, message.role);
                     match &message.content {
-                        PromptContent::Text { text, .. } => {
+                        Content::Text { text, .. } => {
                             tracing::info!("    {}", text);
                         }
                         _ => tracing::info!("    (non-text content)"),

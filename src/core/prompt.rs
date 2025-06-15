@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use crate::core::error::{McpError, McpResult};
 use crate::protocol::types::{
-    PromptArgument, PromptContent, PromptInfo, PromptMessage, PromptResult,
+    PromptArgument, Content, Prompt as PromptInfo, PromptMessage, GetPromptResult as PromptResult, Role,
 };
 
 /// Trait for implementing prompt handlers
@@ -85,7 +85,7 @@ impl Prompt {
         // Validate required arguments
         if let Some(ref args) = self.info.arguments {
             for arg in args {
-                if arg.required && !arguments.contains_key(&arg.name) {
+                if arg.required.unwrap_or(false) && !arguments.contains_key(&arg.name) {
                     return Err(McpError::validation(format!(
                         "Required argument '{}' missing for prompt '{}'",
                         arg.name, self.info.name
@@ -111,40 +111,31 @@ impl PromptMessage {
     /// Create a system message
     pub fn system<S: Into<String>>(content: S) -> Self {
         Self {
-            role: "system".to_string(),
-            content: PromptContent::Text {
-                content_type: "text".to_string(),
-                text: content.into(),
-            },
+            role: Role::User, // Note: 2025-03-26 only has User and Assistant roles
+            content: Content::text(content.into()),
         }
     }
 
     /// Create a user message
     pub fn user<S: Into<String>>(content: S) -> Self {
         Self {
-            role: "user".to_string(),
-            content: PromptContent::Text {
-                content_type: "text".to_string(),
-                text: content.into(),
-            },
+            role: Role::User,
+            content: Content::text(content.into()),
         }
     }
 
     /// Create an assistant message
     pub fn assistant<S: Into<String>>(content: S) -> Self {
         Self {
-            role: "assistant".to_string(),
-            content: PromptContent::Text {
-                content_type: "text".to_string(),
-                text: content.into(),
-            },
+            role: Role::Assistant,
+            content: Content::text(content.into()),
         }
     }
 
     /// Create a message with custom role
-    pub fn with_role<S: Into<String>>(role: S, content: PromptContent) -> Self {
+    pub fn with_role(role: Role, content: Content) -> Self {
         Self {
-            role: role.into(),
+            role,
             content,
         }
     }
@@ -169,6 +160,7 @@ impl PromptHandler for GreetingPrompt {
                 PromptMessage::system("You are a friendly assistant."),
                 PromptMessage::user(format!("Hello, {}!", name)),
             ],
+            meta: None,
         })
     }
 }
@@ -211,6 +203,7 @@ impl PromptHandler for CodeReviewPrompt {
                 PromptMessage::system(system_prompt),
                 PromptMessage::user(user_prompt),
             ],
+            meta: None,
         })
     }
 }
@@ -253,6 +246,7 @@ impl PromptHandler for SqlQueryPrompt {
                 PromptMessage::system(system_prompt),
                 PromptMessage::user(user_prompt),
             ],
+            meta: None,
         })
     }
 }
@@ -285,7 +279,7 @@ impl PromptBuilder {
         self.arguments.push(PromptArgument {
             name: name.into(),
             description: description.map(|d| d.into()),
-            required: true,
+            required: Some(true),
         });
         self
     }
@@ -295,7 +289,7 @@ impl PromptBuilder {
         self.arguments.push(PromptArgument {
             name: name.into(),
             description: description.map(|d| d.into()),
-            required: false,
+            required: Some(false),
         });
         self
     }
@@ -324,7 +318,7 @@ pub fn required_arg<S: Into<String>>(name: S, description: Option<S>) -> PromptA
     PromptArgument {
         name: name.into(),
         description: description.map(|d| d.into()),
-        required: true,
+        required: Some(true),
     }
 }
 
@@ -333,7 +327,7 @@ pub fn optional_arg<S: Into<String>>(name: S, description: Option<S>) -> PromptA
     PromptArgument {
         name: name.into(),
         description: description.map(|d| d.into()),
-        required: false,
+        required: Some(false),
     }
 }
 
@@ -350,11 +344,11 @@ mod tests {
 
         let result = prompt.get(args).await.unwrap();
         assert_eq!(result.messages.len(), 2);
-        assert_eq!(result.messages[0].role, "system");
-        assert_eq!(result.messages[1].role, "user");
+        assert_eq!(result.messages[0].role, Role::User);
+        assert_eq!(result.messages[1].role, Role::User);
 
         match &result.messages[1].content {
-            PromptContent::Text { text, .. } => assert!(text.contains("Alice")),
+            Content::Text { text, .. } => assert!(text.contains("Alice")),
             _ => panic!("Expected text content"),
         }
     }
@@ -374,7 +368,7 @@ mod tests {
         assert_eq!(result.messages.len(), 2);
 
         match &result.messages[1].content {
-            PromptContent::Text { text, .. } => {
+            Content::Text { text, .. } => {
                 assert!(text.contains("javascript"));
                 assert!(text.contains("console.log"));
             }
@@ -390,7 +384,7 @@ mod tests {
             arguments: Some(vec![PromptArgument {
                 name: "arg1".to_string(),
                 description: Some("First argument".to_string()),
-                required: true,
+                required: Some(true),
             }]),
         };
 
@@ -407,7 +401,7 @@ mod tests {
             arguments: Some(vec![PromptArgument {
                 name: "required_arg".to_string(),
                 description: None,
-                required: true,
+                required: Some(true),
             }]),
         };
 
@@ -436,42 +430,40 @@ mod tests {
         let args = prompt.info.arguments.unwrap();
         assert_eq!(args.len(), 2);
         assert_eq!(args[0].name, "input");
-        assert!(args[0].required);
+        assert_eq!(args[0].required, Some(true));
         assert_eq!(args[1].name, "format");
-        assert!(!args[1].required);
+        assert_eq!(args[1].required, Some(false));
     }
 
     #[test]
     fn test_prompt_message_creation() {
         let system_msg = PromptMessage::system("You are a helpful assistant");
-        assert_eq!(system_msg.role, "system");
+        assert_eq!(system_msg.role, Role::User);
 
         let user_msg = PromptMessage::user("Hello!");
-        assert_eq!(user_msg.role, "user");
+        assert_eq!(user_msg.role, Role::User);
 
         let assistant_msg = PromptMessage::assistant("Hi there!");
-        assert_eq!(assistant_msg.role, "assistant");
+        assert_eq!(assistant_msg.role, Role::Assistant);
     }
 
     #[test]
     fn test_prompt_content_creation() {
-        let text_content = PromptContent::text("Hello, world!");
+        let text_content = Content::text("Hello, world!");
         match text_content {
-            PromptContent::Text { content_type, text } => {
-                assert_eq!(content_type, "text");
+            Content::Text { text, .. } => {
                 assert_eq!(text, "Hello, world!");
             }
             _ => panic!("Expected text content"),
         }
 
-        let image_content = PromptContent::image("base64data", "image/png");
+        let image_content = Content::image("base64data", "image/png");
         match image_content {
-            PromptContent::Image {
-                content_type,
+            Content::Image {
                 data,
                 mime_type,
+                ..
             } => {
-                assert_eq!(content_type, "image");
                 assert_eq!(data, "base64data");
                 assert_eq!(mime_type, "image/png");
             }

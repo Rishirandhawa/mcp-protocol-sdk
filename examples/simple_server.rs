@@ -17,8 +17,8 @@ use mcp_protocol_sdk::{
         tool::ToolHandler,
     },
     protocol::types::{
-        Content, PromptArgument, PromptContent, PromptInfo, PromptMessage, PromptResult,
-        ResourceContent, ResourceInfo, ToolResult,
+        Content, PromptArgument, Prompt as PromptInfo, PromptMessage, GetPromptResult as PromptResult,
+        ResourceContents, Resource as ResourceInfo, ToolResult, Role,
     },
     server::mcp_server::ServerConfig,
     server::McpServer,
@@ -59,6 +59,7 @@ impl ToolHandler for CalculatorHandler {
                     return Ok(ToolResult {
                         content: vec![Content::text("Error: Division by zero")],
                         is_error: Some(true),
+                        meta: None,
                     });
                 }
                 a / b
@@ -70,6 +71,7 @@ impl ToolHandler for CalculatorHandler {
                         operation
                     ))],
                     is_error: Some(true),
+                    meta: None,
                 });
             }
         };
@@ -80,6 +82,7 @@ impl ToolHandler for CalculatorHandler {
                 a, operation, b, result
             ))],
             is_error: None,
+            meta: None,
         })
     }
 }
@@ -114,6 +117,7 @@ impl ToolHandler for EchoHandler {
         Ok(ToolResult {
             content: vec![Content::text(formatted_message)],
             is_error: None,
+            meta: None,
         })
     }
 }
@@ -155,7 +159,7 @@ impl ResourceHandler for FileSystemHandler {
         &self,
         uri: &str,
         _params: &HashMap<String, String>,
-    ) -> McpResult<Vec<ResourceContent>> {
+    ) -> McpResult<Vec<ResourceContents>> {
         let files = self.files.read().await;
 
         if let Some(content) = files.get(uri) {
@@ -167,11 +171,10 @@ impl ResourceHandler for FileSystemHandler {
                 Some("text/plain".to_string())
             };
 
-            Ok(vec![ResourceContent {
+            Ok(vec![ResourceContents::Text {
                 uri: uri.to_string(),
                 mime_type,
-                text: Some(content.clone()),
-                blob: None,
+                text: content.clone(),
             }])
         } else {
             Err(McpError::ResourceNotFound(uri.to_string()))
@@ -195,9 +198,11 @@ impl ResourceHandler for FileSystemHandler {
 
                 ResourceInfo {
                     uri: uri.clone(),
-                    name: name.to_string(),
+                    name: Some(name.to_string()),
                     description: Some(format!("Demo file: {}", name)),
                     mime_type,
+                    annotations: None,
+                    size: None,
                 }
             })
             .collect())
@@ -253,14 +258,15 @@ impl PromptHandler for CodeReviewPromptHandler {
             )),
             messages: vec![
                 PromptMessage {
-                    role: "system".to_string(),
-                    content: PromptContent::text(system_prompt),
+                    role: Role::User,
+                    content: Content::text(system_prompt),
                 },
                 PromptMessage {
-                    role: "user".to_string(),
-                    content: PromptContent::text(user_prompt),
+                    role: Role::User,
+                    content: Content::text(user_prompt),
                 },
             ],
+            meta: None,
         })
     }
 }
@@ -307,14 +313,15 @@ impl PromptHandler for DocumentationPromptHandler {
             )),
             messages: vec![
                 PromptMessage {
-                    role: "system".to_string(),
-                    content: PromptContent::text(system_prompt),
+                    role: Role::User,
+                    content: Content::text(system_prompt),
                 },
                 PromptMessage {
-                    role: "user".to_string(),
-                    content: PromptContent::text(user_prompt),
+                    role: Role::User,
+                    content: Content::text(user_prompt),
                 },
             ],
+            meta: None,
         })
     }
 }
@@ -409,9 +416,11 @@ async fn main() -> McpResult<()> {
         .add_resource_detailed(
             ResourceInfo {
                 uri: "file:///".to_string(),
-                name: "Demo File System".to_string(),
+                name: Some("Demo File System".to_string()),
                 description: Some("Demo file system with sample files".to_string()),
                 mime_type: Some("inode/directory".to_string()),
+                annotations: None,
+                size: None,
             },
             fs_handler,
         )
@@ -429,14 +438,14 @@ async fn main() -> McpResult<()> {
                     PromptArgument {
                         name: "language".to_string(),
                         description: Some("Programming language".to_string()),
-                        required: false,
+                        required: Some(false),
                     },
                     PromptArgument {
                         name: "focus".to_string(),
                         description: Some(
                             "Review focus (security, performance, style, general)".to_string(),
                         ),
-                        required: false,
+                        required: Some(false),
                     },
                 ]),
             },
@@ -453,12 +462,12 @@ async fn main() -> McpResult<()> {
                     PromptArgument {
                         name: "type".to_string(),
                         description: Some("Documentation type (api, class, function)".to_string()),
-                        required: false,
+                        required: Some(false),
                     },
                     PromptArgument {
                         name: "language".to_string(),
                         description: Some("Programming language".to_string()),
-                        required: false,
+                        required: Some(false),
                     },
                 ]),
             },
