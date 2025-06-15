@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::core::error::{McpError, McpResult};
-use crate::protocol::{messages::*, types::*, LATEST_PROTOCOL_VERSION};
+use crate::protocol::{LATEST_PROTOCOL_VERSION, messages::*, types::*};
 
 /// Handler for initialization requests
 pub struct InitializeHandler;
@@ -25,7 +25,7 @@ impl InitializeHandler {
             None => {
                 return Err(McpError::Validation(
                     "Missing initialize parameters".to_string(),
-                ))
+                ));
             }
         };
 
@@ -106,7 +106,7 @@ impl ToolHandler {
             None => {
                 return Err(McpError::Validation(
                     "Missing tool call parameters".to_string(),
-                ))
+                ));
             }
         };
 
@@ -189,7 +189,7 @@ impl ResourceHandler {
             None => {
                 return Err(McpError::Validation(
                     "Missing resource read parameters".to_string(),
-                ))
+                ));
             }
         };
 
@@ -207,7 +207,10 @@ impl ResourceHandler {
         let query_params = HashMap::new();
         let contents = resource.handler.read(&params.uri, &query_params).await?;
 
-        Ok(ReadResourceResult { contents, meta: None })
+        Ok(ReadResourceResult {
+            contents,
+            meta: None,
+        })
     }
 
     /// Handle resources/subscribe request
@@ -222,7 +225,7 @@ impl ResourceHandler {
             None => {
                 return Err(McpError::Validation(
                     "Missing resource subscribe parameters".to_string(),
-                ))
+                ));
             }
         };
 
@@ -253,7 +256,7 @@ impl ResourceHandler {
             None => {
                 return Err(McpError::Validation(
                     "Missing resource unsubscribe parameters".to_string(),
-                ))
+                ));
             }
         };
 
@@ -327,7 +330,7 @@ impl PromptHandler {
             None => {
                 return Err(McpError::Validation(
                     "Missing prompt get parameters".to_string(),
-                ))
+                ));
             }
         };
 
@@ -354,12 +357,17 @@ impl PromptHandler {
                     PromptMessage {
                         role: msg.role,
                         content: match msg.content {
-                            Content::Text { text, .. } => {
-                                Content::Text { text, annotations: None }
-                            }
-                            Content::Image { data, mime_type, .. } => {
-                                Content::Image { data, mime_type, annotations: None }
-                            }
+                            Content::Text { text, .. } => Content::Text {
+                                text,
+                                annotations: None,
+                            },
+                            Content::Image {
+                                data, mime_type, ..
+                            } => Content::Image {
+                                data,
+                                mime_type,
+                                annotations: None,
+                            },
                             other => other,
                         },
                     }
@@ -397,7 +405,7 @@ impl LoggingHandler {
             None => {
                 return Err(McpError::Validation(
                     "Missing logging level parameters".to_string(),
-                ))
+                ));
             }
         };
 
@@ -592,11 +600,13 @@ mod tests {
         assert!(notifications::prompts_list_changed().is_ok());
         assert!(notifications::resource_updated("file:///test".to_string()).is_ok());
         assert!(notifications::progress("token".to_string(), 0.5, Some(100)).is_ok());
-        assert!(notifications::log_message(
-            LoggingLevel::Info,
-            Some("test".to_string()),
-            json!({"message": "test log"})
-        )
-        .is_ok());
+        assert!(
+            notifications::log_message(
+                LoggingLevel::Info,
+                Some("test".to_string()),
+                json!({"message": "test log"})
+            )
+            .is_ok()
+        );
     }
 }

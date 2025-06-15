@@ -5,7 +5,7 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -16,7 +16,7 @@ use mcp_protocol_sdk::{
         resource::ResourceHandler,
         tool::ToolHandler,
     },
-    protocol::types::{Content, ResourceContents, Resource as ResourceInfo, ToolResult},
+    protocol::types::{Content, Resource as ResourceInfo, ResourceContents, ToolResult},
     server::McpServer,
     transport::stdio::StdioServerTransport,
 };

@@ -4,7 +4,7 @@
 //! over WebSocket connections for real-time bidirectional communication.
 
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 
 use mcp_protocol_sdk::{
@@ -97,8 +97,6 @@ impl ToolHandler for WebSocketChatHandler {
             .get("room")
             .and_then(|v| v.as_str())
             .unwrap_or("general");
-
-
 
         Ok(ToolResult {
             content: vec![Content::text(format!(

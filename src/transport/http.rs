@@ -5,28 +5,30 @@
 
 use async_trait::async_trait;
 use axum::{
+    Json, Router,
     extract::State,
     http::{HeaderMap, StatusCode},
-    response::{sse::Event, Sse},
+    response::{Sse, sse::Event},
     routing::{get, post},
-    Json, Router,
 };
 use reqwest::Client;
 use serde_json::Value;
 use std::{collections::HashMap, convert::Infallible, sync::Arc, time::Duration};
-use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, broadcast, mpsc};
 
 #[cfg(all(feature = "futures", feature = "tokio-stream"))]
 use futures::stream::Stream;
 
 #[cfg(feature = "tokio-stream")]
-use tokio_stream::{wrappers::BroadcastStream, StreamExt};
+use tokio_stream::{StreamExt, wrappers::BroadcastStream};
 
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
 
 use crate::core::error::{McpError, McpResult};
-use crate::protocol::types::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse, JsonRpcError, error_codes, JsonRpcMessage};
+use crate::protocol::types::{
+    JsonRpcError, JsonRpcMessage, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse, error_codes,
+};
 use crate::transport::traits::{ConnectionState, ServerTransport, Transport, TransportConfig};
 
 // ============================================================================
@@ -246,7 +248,7 @@ impl Transport for HttpClientTransport {
         let url = format!("{}/mcp", self.base_url);
 
         let mut http_request = self.client.post(&url);
-        
+
         // Apply headers from config and defaults
         for (name, value) in self.headers.iter() {
             let name_str = name.as_str();
@@ -284,19 +286,16 @@ impl Transport for HttpClientTransport {
             )));
         }
 
-        let json_response: JsonRpcResponse = response
-            .json()
-            .await
-            .map_err(|e| {
-                // Untrack request on parse error
-                let request_id = request_with_id.id.clone();
-                let pending_requests = self.pending_requests.clone();
-                tokio::spawn(async move {
-                    let mut pending = pending_requests.lock().await;
-                    pending.remove(&request_id);
-                });
-                McpError::Http(format!("Failed to parse response: {}", e))
-            })?;
+        let json_response: JsonRpcResponse = response.json().await.map_err(|e| {
+            // Untrack request on parse error
+            let request_id = request_with_id.id.clone();
+            let pending_requests = self.pending_requests.clone();
+            tokio::spawn(async move {
+                let mut pending = pending_requests.lock().await;
+                pending.remove(&request_id);
+            });
+            McpError::Http(format!("Failed to parse response: {}", e))
+        })?;
 
         // Validate response ID matches request ID
         if json_response.id != request_with_id.id {
@@ -317,7 +316,7 @@ impl Transport for HttpClientTransport {
         let url = format!("{}/mcp/notify", self.base_url);
 
         let mut http_request = self.client.post(&url);
-        
+
         // Apply headers from config and defaults
         for (name, value) in self.headers.iter() {
             let name_str = name.as_str();
@@ -505,8 +504,10 @@ impl ServerTransport for HttpServerTransport {
     async fn handle_request(&mut self, request: JsonRpcRequest) -> McpResult<JsonRpcResponse> {
         // This is now handled by the HTTP server itself and should not be called directly
         // The HTTP transport handles requests through the HTTP server routes
-        tracing::warn!("handle_request called directly on HTTP transport - this may indicate a configuration issue");
-        
+        tracing::warn!(
+            "handle_request called directly on HTTP transport - this may indicate a configuration issue"
+        );
+
         let state = self.state.read().await;
 
         if let Some(ref handler) = state.request_handler {
@@ -519,7 +520,9 @@ impl ServerTransport for HttpServerTransport {
             }
         } else {
             // Return an error indicating no handler is configured
-            Err(McpError::Http("No request handler configured for HTTP transport".to_string()))
+            Err(McpError::Http(
+                "No request handler configured for HTTP transport".to_string(),
+            ))
         }
     }
 

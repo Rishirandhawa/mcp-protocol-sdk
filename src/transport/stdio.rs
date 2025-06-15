@@ -10,8 +10,8 @@ use std::process::Stdio;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::process::{Child, Command};
-use tokio::sync::{mpsc, Mutex};
-use tokio::time::{timeout, Duration};
+use tokio::sync::{Mutex, mpsc};
+use tokio::time::{Duration, timeout};
 
 use crate::core::error::{McpError, McpResult};
 use crate::protocol::types::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse, error_codes};
@@ -382,7 +382,8 @@ impl ServerTransport for StdioServerTransport {
                     // Parse the request
                     match serde_json::from_str::<JsonRpcRequest>(line) {
                         Ok(request) => {
-                            let response_or_error = match self.handle_request(request.clone()).await {
+                            let response_or_error = match self.handle_request(request.clone()).await
+                            {
                                 Ok(response) => serde_json::to_string(&response),
                                 Err(error) => {
                                     // Convert McpError to JsonRpcError
@@ -404,7 +405,8 @@ impl ServerTransport for StdioServerTransport {
                                 }
                             };
 
-                            let response_line = response_or_error.map_err(McpError::serialization)?;
+                            let response_line =
+                                response_or_error.map_err(McpError::serialization)?;
 
                             tracing::trace!("Sending: {}", response_line);
 
@@ -440,7 +442,10 @@ impl ServerTransport for StdioServerTransport {
 
     async fn handle_request(&mut self, request: JsonRpcRequest) -> McpResult<JsonRpcResponse> {
         // Default implementation - return method not found error
-        Err(McpError::protocol(format!("Method '{}' not found", request.method)))
+        Err(McpError::protocol(format!(
+            "Method '{}' not found",
+            request.method
+        )))
     }
 
     async fn send_notification(&mut self, notification: JsonRpcNotification) -> McpResult<()> {
@@ -537,7 +542,7 @@ mod tests {
 
         let result = transport.handle_request(request).await;
         assert!(result.is_err());
-        
+
         match result.unwrap_err() {
             McpError::Protocol(msg) => assert!(msg.contains("unknown_method")),
             _ => panic!("Expected Protocol error"),

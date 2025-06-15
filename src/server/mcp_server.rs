@@ -10,13 +10,13 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 
 use crate::core::{
+    PromptInfo, ResourceInfo, ToolInfo,
     error::{McpError, McpResult},
     prompt::{Prompt, PromptHandler},
     resource::{Resource, ResourceHandler},
     tool::{Tool, ToolHandler},
-    PromptInfo, ResourceInfo, ToolInfo,
 };
-use crate::protocol::{messages::*, types::*, validation::*, error_codes::*};
+use crate::protocol::{error_codes::*, messages::*, types::*, validation::*};
 use crate::transport::traits::ServerTransport;
 
 /// Configuration for the MCP server
@@ -242,9 +242,10 @@ impl McpServer {
     {
         let tool_schema = ToolInputSchema {
             schema_type: "object".to_string(),
-            properties: schema.get("properties").and_then(|p| p.as_object()).map(|obj| {
-                obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
-            }),
+            properties: schema
+                .get("properties")
+                .and_then(|p| p.as_object())
+                .map(|obj| obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect()),
             required: schema.get("required").and_then(|r| {
                 r.as_array().map(|arr| {
                     arr.iter()
@@ -252,7 +253,10 @@ impl McpServer {
                         .collect()
                 })
             }),
-            additional_properties: schema.as_object().unwrap_or(&serde_json::Map::new()).iter()
+            additional_properties: schema
+                .as_object()
+                .unwrap_or(&serde_json::Map::new())
+                .iter()
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
         };
@@ -545,12 +549,15 @@ impl McpServer {
                 };
                 // For now, return errors as part of the result
                 // TODO: Implement proper JSON-RPC error handling for 2025-03-26
-                Ok(JsonRpcResponse::success(request.id, serde_json::json!({
-                    "error": {
-                        "code": code,
-                        "message": message,
-                    }
-                }))?)
+                Ok(JsonRpcResponse::success(
+                    request.id,
+                    serde_json::json!({
+                        "error": {
+                            "code": code,
+                            "message": message,
+                        }
+                    }),
+                )?)
             }
         }
     }
@@ -565,7 +572,7 @@ impl McpServer {
             None => {
                 return Err(McpError::Validation(
                     "Missing initialize parameters".to_string(),
-                ))
+                ));
             }
         };
 
@@ -606,7 +613,7 @@ impl McpServer {
             None => {
                 return Err(McpError::Validation(
                     "Missing tool call parameters".to_string(),
-                ))
+                ));
             }
         };
 
@@ -638,14 +645,17 @@ impl McpServer {
             None => {
                 return Err(McpError::Validation(
                     "Missing resource read parameters".to_string(),
-                ))
+                ));
             }
         };
 
         validate_read_resource_params(&params)?;
 
         let contents = self.read_resource(&params.uri).await?;
-        let result = ReadResourceResult { contents, meta: None };
+        let result = ReadResourceResult {
+            contents,
+            meta: None,
+        };
 
         Ok(serde_json::to_value(result)?)
     }
@@ -656,7 +666,7 @@ impl McpServer {
             None => {
                 return Err(McpError::Validation(
                     "Missing resource subscribe parameters".to_string(),
-                ))
+                ));
             }
         };
 
@@ -673,7 +683,7 @@ impl McpServer {
             None => {
                 return Err(McpError::Validation(
                     "Missing resource unsubscribe parameters".to_string(),
-                ))
+                ));
             }
         };
 
@@ -706,7 +716,7 @@ impl McpServer {
             None => {
                 return Err(McpError::Validation(
                     "Missing prompt get parameters".to_string(),
-                ))
+                ));
             }
         };
 
@@ -722,7 +732,7 @@ impl McpServer {
             None => {
                 return Err(McpError::Validation(
                     "Missing logging level parameters".to_string(),
-                ))
+                ));
             }
         };
 
